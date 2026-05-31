@@ -193,7 +193,7 @@ function link_dotfiles() {
   ${VERBOSE} && stow_args+=("--verbose=2")
   ${FIRST_RUN} && stow_args+=("-f")
 
-  PACKAGES+=("zsh git nvim python ghostty")
+  PACKAGES+=("zsh git nvim python ghostty tmux")
   stow_args+=(-t "${HOME}" ${PACKAGES[@]})
 
   stow "-D" "${stow_args[@]}"
