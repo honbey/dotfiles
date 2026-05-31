@@ -1,0 +1,15 @@
+[submodule "tmux/.config/tmux/plugins/tmux"]
+	path = tmux/.config/tmux/plugins/tmux
+	url = git@github.com:catppuccin/tmux.git
+[submodule "tmux/.config/tmux/plugins/tpm"]
+	path = tmux/.config/tmux/plugins/tpm
+	url = git@github.com/tmux-plugins/tpm.git
+[submodule "tmux/.config/tmux/plugins/tmux-cpu"]
+	path = tmux/.config/tmux/plugins/tmux-cpu
+	url = git@github.com:tmux-plugins/tmux-cpu.git
+[submodule "tmux/.config/tmux/plugins/tmux-sensible"]
+	path = tmux/.config/tmux/plugins/tmux-sensible
+	url = git@github.com:tmux-plugins/tmux-sensible.git
+[submodule "tmux/.config/tmux/plugins/tmux-battery"]
+	path = tmux/.config/tmux/plugins/tmux-battery
+	url = git@github.com:tmux-plugins/tmux-battery.git
