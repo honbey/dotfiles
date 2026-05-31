@@ -1,0 +1,2 @@
+# Custom config for different machine.
+export __DOTFILES__=""
