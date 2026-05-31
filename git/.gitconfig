@@ -1,0 +1,23 @@
+[user]
+	name = honbey
+	email = honbey@qq.com
+	signingkey = 5ABC1EC6EC89D1CF
+[core]
+	editor = nvim
+	quotepath = false
+	safecrlf = true
+	# Unix / Linux
+	autocrlf = input
+	# Windows
+	# autocrlf = true
+[init]
+	defaultBranch = main
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+[alias]
+	logc = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+[include]
+  path = ~/.gitconfig.local
