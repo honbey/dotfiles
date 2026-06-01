@@ -3,7 +3,14 @@ set -euo pipefail
 
 # INFO: PACKAGES NEED BE INSTALLED
 # or use: ` stow pkg -t ~`
-PACKAGES+=("zsh git vim nvim python ghostty tmux")
+# stow # stow itself individually
+PACKAGES+=(
+  bin
+  zsh ssh tmux ghostty
+  git sqlite podman
+  vim nvim
+  python node
+)
 # Default settings
 DOTFILES_DIR="${DOTFILES_DIR:-${HOME}/dotfiles}"
 FIRST_RUN=false
