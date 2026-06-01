@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# INFO: PACKAGES NEED BE INSTALLED
+# or use: ` stow pkg -t ~`
+PACKAGES+=("zsh git vim nvim python ghostty tmux")
 # Default settings
 DOTFILES_DIR="${DOTFILES_DIR:-${HOME}/dotfiles}"
 FIRST_RUN=false
 DRY_RUN=false
 VERBOSE=false
-PACKAGES=()
 
 # Colors for output
 RED='\033[0;31m'
@@ -193,7 +195,6 @@ function link_dotfiles() {
   ${VERBOSE} && stow_args+=("--verbose=2")
   ${FIRST_RUN} && stow_args+=("-f")
 
-  PACKAGES+=("zsh git nvim python ghostty tmux")
   stow_args+=(-t "${HOME}" ${PACKAGES[@]})
 
   stow "-D" "${stow_args[@]}"
