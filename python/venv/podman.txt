@@ -1,0 +1,3 @@
+podman-compose
+python-dotenv
+PyYAML
