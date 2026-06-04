@@ -1,0 +1,6 @@
+# TODO: use shell script to judge and install
+# if package installed by OS package manager, skip it
+
+common: bat btop dust fd fzf git-crypt gnupg jq neovim pinentry ripgrep rm-improved starship stow tmux yazi zoxide
+macos: coreutils gnu-sed iproute2mac mtr
+optional: certbot cmake curl make node@24 sevenzip uv zsh

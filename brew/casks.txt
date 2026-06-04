@@ -1,0 +1,14 @@
+# macOS
+anki
+brave-browser
+endless-sky-high-dpi
+ghostty
+iina
+maccy
+multitouch
+netnewswire
+obs
+skim
+squirrel
+shotcut
+wireshark
