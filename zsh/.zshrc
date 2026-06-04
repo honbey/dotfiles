@@ -37,7 +37,7 @@ zinit wait'2' lucid is-snippet for \
   "${ZSH_HOME}/wait2-functions.zsh"
 
 ### Plugins(wait 0)
-zinit wait lucid light-mode for \
+zinit wait lucid light-mode depth'1' for \
   atinit"zicompinit; zicdreplay" \
   zdharma-continuum/fast-syntax-highlighting \
   atload"_zsh_autosuggest_start" \
@@ -62,6 +62,6 @@ zinit wait lucid light-mode for \
   OMZL::history.zsh
 
 ### Plugins(wait 1)
-zinit wait'1' lucid light-mode for \
+zinit wait'1' lucid light-mode depth'1' for \
   voronkovich/gitignore.plugin.zsh \
   MichaelAquilina/zsh-you-should-use
