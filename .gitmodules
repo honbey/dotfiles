@@ -3,7 +3,7 @@
 	url = git@github.com:catppuccin/tmux.git
 [submodule "tmux/.config/tmux/plugins/tpm"]
 	path = tmux/.config/tmux/plugins/tpm
-	url = git@github.com/tmux-plugins/tpm.git
+	url = git@github.com:tmux-plugins/tpm.git
 [submodule "tmux/.config/tmux/plugins/tmux-cpu"]
 	path = tmux/.config/tmux/plugins/tmux-cpu
 	url = git@github.com:tmux-plugins/tmux-cpu.git
