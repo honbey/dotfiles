@@ -50,10 +50,10 @@ function pipm() {
 alias pip='pip3'
 
 ### Rust
-if type rustc &>/dev/null; then
+if type rustup &>/dev/null; then
   export RUSTPATH="${DATA_DIR}/rust"
   export CARGO_HOME="${RUSTPATH}/cargo"
-  export RUST_HOME="${RUSTPATH}/rustup"
+  export RUSTUP_HOME="${RUSTPATH}/rustup"
   add_path "${CARGO_HOME}/bin"
 fi
 
