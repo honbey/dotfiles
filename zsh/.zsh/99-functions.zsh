@@ -21,6 +21,20 @@ function add_path() {
   fi
 }
 
+function add_fpath() {
+  [[ -d "$1" ]] || return -1
+
+  local new_fpath
+  new_fpath="$1"
+
+  if [[ ":${FPATH}:" == *":${new_fpath}:"* ]]; then
+    return 0
+  fi
+
+  export FPATH="${new_fpath}:${FPATH}"
+  return 0
+}
+
 # Beautify the output of PATH and FPATH.
 #   *return null
 function show_path() {
