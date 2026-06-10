@@ -1,12 +1,26 @@
 ### Homebrew
+# manual `brew shellenv`
 if [[ -d /opt/homebrew/bin ]]; then # macOS
+  export HOMEBREW_PREFIX="/opt/homebrew"
+  export HOMEBREW_CELLAR="/opt/homebrew/Cellar"
+  export HOMEBREW_REPOSITORY="/opt/homebrew/Homebrew"
+  add_path "/opt/homebrew/sbin"
+  add_fpath "/opt/homebrew/share/zsh/site-functions"
   add_path "/opt/homebrew/opt/coreutils/libexec/gnubin"
   add_path "/opt/homebrew/opt/gnu-sed/libexec/gnubin"
+  [ -z "${MANPATH-}" ] || export MANPATH=":${MANPATH#:}"
+  export INFOPATH="/opt/homebrew/share/info:${INFOPATH:-}"
+elif [[ -d /home/linuxbrew/.linuxbrew ]]; then
+  export HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
+  export HOMEBREW_CELLAR="/home/linuxbrew/.linuxbrew/Cellar"
+  export HOMEBREW_REPOSITORY="/home/linuxbrew/.linuxbrew/Homebrew"
+  add_path "/home/linuxbrew/.linuxbrew/sbin"
+  add_fpath "/home/linuxbrew/.linuxbrew/share/zsh/site-functions"
+  [ -z "${MANPATH-}" ] || export MANPATH=":${MANPATH#:}"
+  export INFOPATH="/home/linuxbrew/.linuxbrew/share/info:${INFOPATH:-}"
 fi
 
 # Set mirror of Homebrew to escalate download speed.
-# Because the Tsinghua mirror can not be accessed in some public WiFi.
-# The HOMEBREW_BREW_GIT_REMOTE's PATH is different in different mirror.
 #   $1 string: mirror's name, support lists: ["tsinghua", "ustc", "ali"]
 #   *return null
 function set_brew_mirror() {

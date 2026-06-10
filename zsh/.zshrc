@@ -11,9 +11,8 @@ ZSH_HOME="${HOME}/.zsh"
 zinit snippet "${ZSH_HOME}/99-functions.zsh"
 
 # Homebrew/Linuxbrew
-[[ -d /opt/homebrew/bin ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
-# FIX: duplicated .linuxbrew fpath when use tmux
-[[ -d /home/linuxbrew/.linuxbrew/bin ]] && eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+[[ -d /opt/homebrew/bin ]] && eval "$(add_path /opt/homebrew/bin)"
+[[ -d /home/linuxbrew/.linuxbrew/bin ]] && add_path "/home/linuxbrew/.linuxbrew/bin"
 
 # Load starship theme
 type starship &>/dev/null && eval "$(starship init zsh)"
