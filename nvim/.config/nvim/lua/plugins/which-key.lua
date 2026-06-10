@@ -3,6 +3,13 @@ return {
     "folke/which-key.nvim",
     opts = {
       spec = {
+        {
+          "<leader>gg",
+          function()
+            Snacks.lazygit()
+          end,
+          desc = "Lazygit",
+        },
         -- TODO too many keys to confuse me
         -- (^use) what is the Capital key do
         {
