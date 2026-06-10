@@ -15,8 +15,3 @@ vim.keymap.del("n", "<c-l>")
 
 -- blackhole register
 vim.keymap.set("n", "_", '"_')
-
--- or <c-\\><c-n>
-vim.keymap.set("i", "<c-g>", "<esc>", { remap = true })
-vim.keymap.set("n", "<c-g>", "<esc>", { remap = true })
-vim.keymap.set("t", "<c-g>", "<esc>", { remap = true })
