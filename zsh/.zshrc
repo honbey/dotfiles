@@ -11,7 +11,7 @@ ZSH_HOME="${HOME}/.zsh"
 zinit snippet "${ZSH_HOME}/99-functions.zsh"
 
 # Homebrew/Linuxbrew
-[[ -d /opt/homebrew/bin ]] && eval "$(add_path /opt/homebrew/bin)"
+[[ -d /opt/homebrew/bin ]] && add_path "/opt/homebrew/bin"
 [[ -d /home/linuxbrew/.linuxbrew/bin ]] && add_path "/home/linuxbrew/.linuxbrew/bin"
 
 # Load starship theme
