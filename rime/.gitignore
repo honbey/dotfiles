@@ -15,6 +15,8 @@ rime_patch
 *temp*
 *private*
 
+custom_phrase.txt
+
 # Download by update_dicts.sh
 8105.dict.yaml
 base.dict.yaml
