@@ -1,0 +1,114 @@
+# 小狼毫配置
+config_version: "2025-12-06" # config_version: '1.0.3'
+
+style:
+  # 选择皮肤，亮色与暗色主题
+  color_scheme: catppuccin_frappe
+  color_scheme_dark: catppuccin_frappe
+  horizontal: true
+
+  # 以下是预设选项。如果皮肤没写，则使用这些属性；如果皮肤写了，使用皮肤的。
+
+  # 候选框与文字的排列方式
+  candidate_list_layout: linear # stacked | linear       皮肤横竖排显示是调整这个
+  text_orientation: horizontal # horizontal | vertical  文字方向
+  # 拼音或词句是否显示在键入位置
+  inline_preedit: true # true | false  键入码显示位置
+  inline_candidate: false # true | false  选中词显示位置
+
+  # Whether candidate panel stick to screen edge to reduce jumping
+  memorize_size: true
+  # Whether transparent colors stack on each other
+  mutual_exclusive: false
+  # Whether to use a translucent background. Only visible when background color is transparent
+  translucency: false
+  # Enable to show small arrows that indicates if paging up/down is possible
+  show_paging: false
+
+  corner_radius: 6
+  hilited_corner_radius: 5
+  line_spacing: 10
+  # Space between preedit and candidates in non-inline mode
+  spacing: 8
+  # A number greater than 0 renders shadow around high-lighted candidate
+  shadow_size: 0
+  # Controls non-hililighted candidate background size, relative to highlighted
+  # Nagetive means shrink, positive meas expand
+  #surrounding_extra_expansion: 0
+
+  # format using %@ and %c is deprecated since 1.0, Squirrel 1.0
+  # %@ is automatically expanded to "[candidate] [comment]"
+  # and %c is replaced by "[label]"
+  candidate_format: "[label]. [candidate] [comment]" # 候选项格式化
+
+  # adjust the base line of text
+  #base_offset: 0
+  font_face: "LXGW WenKai"
+  font_point: 14
+  #label_font_face: 'Avenir'
+  #label_font_point: 12
+  #comment_font_face: 'Avenir'
+  #comment_font_point: 16
+
+# 皮肤列表
+preset_color_schemes:
+  catppuccin_latte:
+    name: Catppuccin Latte
+
+    back_color: 0xE8E0DC # 候选条背景色 Crust
+    border_color: 0xEFE9E6 # 边框色 Mantle
+    text_color: 0x775F5C # 拼音行文字颜色 Subtext1
+    label_color: 0x856F6C # 预选栏编号颜色 Subtext0
+    candidate_text_color: 0x694F4C # 预选项文字颜色 Text
+    hilited_back_color: 0xef3988 # 第一候选项背景背景色 Mauve
+    hilited_candidate_text_color: 0xF5F1EF # 第一候选项文字颜色 Base
+    hilited_candidate_label_color: 0xDAD0CC # 第一候选项编号颜色 Surface0
+    hilited_text_color: 0xBEB0AC # 高亮拼音 (需要开启内嵌编码) Surface2
+    hilited_comment_text_color: 0xDAD0CC # 注解文字高亮 Surface0
+    comment_text_color: 0xBEB0AC # 拼音等提示文字颜色 Surface2
+
+  catppuccin_mocha:
+    name: Catppuccin Mocha
+
+    back_color: 0x1B1111 # 候选条背景色 Crust
+    border_color: 0x251818 # 边框色 Mantle
+    text_color: 0xDEC2BA # 拼音行文字颜色 Subtext1
+    label_color: 0xC8ADA6 # 预选栏编号颜色 Subtext0
+    candidate_text_color: 0xF4D6CD # 预选项文字颜色 Text
+    hilited_back_color: 0xF7A6CB # 第一候选项背景背景色 Mauve
+    hilited_candidate_text_color: 0x2E1E1E # 第一候选项文字颜色 Base
+    hilited_candidate_label_color: 0x443231 # 第一候选项编号颜色 Surface0
+    hilited_text_color: 0x705B58 # 高亮拼音 (需要开启内嵌编码) Surface2
+    hilited_comment_text_color: 0x443231 # 注解文字高亮 Surface0
+    comment_text_color: 0x705B58 # 拼音等提示文字颜色 Surface2
+
+  catppuccin_frappe:
+    name: Catppuccin Frappe
+
+    back_color: 0x342623 # 候选条背景色 Crust
+    border_color: 0x3C2C29 # 边框色 Mantle
+    text_color: 0xE2BFB5 # 拼音行文字颜色 Subtext1
+    label_color: 0xCEADA5 # 预选栏编号颜色 Subtext0
+    candidate_text_color: 0xF5D0C6 # 预选项文字颜色 Text
+    hilited_back_color: 0xE69ECA # 第一候选项背景背景色 Mauve
+    hilited_candidate_text_color: 0x463430 # 第一候选项文字颜色 Base
+    hilited_candidate_label_color: 0x594541 # 第一候选项编号颜色 Surface0
+    hilited_text_color: 0x806862 # 高亮拼音 (需要开启内嵌编码) Surface2
+    hilited_comment_text_color: 0x594541 # 注解文字高亮 Surface0
+    comment_text_color: 0x806862 # 拼音等提示文字颜色 Surface2
+
+  catppuccin_macchiato:
+    name: Catppuccin Macchiato
+
+    back_color: 0x261918 # 候选条背景色 Crust
+    border_color: 0x30201E # 边框色 Mantle
+    text_color: 0xE0C0B8 # 拼音行文字颜色 Subtext1
+    label_color: 0xCBADA5 # 预选栏编号颜色 Subtext0
+    candidate_text_color: 0xF5D3CA # 预选项文字颜色 Text
+    hilited_back_color: 0xF6A0C6 # 第一候选项背景背景色 Mauve
+    hilited_candidate_text_color: 0x3A2724 # 第一候选项文字颜色 Base
+    hilited_candidate_label_color: 0x4F3A36 # 第一候选项编号颜色 Surface0
+    hilited_text_color: 0x70B558 # 高亮拼音 (需要开启内嵌编码) Surface2
+    hilited_comment_text_color: 0x4F3A36 # 注解文字高亮 Surface2
+    comment_text_color: 0x70B558 # 拼音等提示文字颜色 Surface0
+
