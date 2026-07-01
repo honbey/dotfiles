@@ -8,7 +8,7 @@ macOS: 输入法为[鼠须管 - Squirrel](https://github.com/rime/squirrel)。
 
 Android: 输入法为[小企鹅输入法](https://fcitx.cn)，加载 [Rime 插件](https://github.com/fcitx5-android/fcitx5-android)。
 
-Windows: 用的很少，暂时没配置。
+Windows: 输入法为[小狼毫 - Weasel](https://github.com/rime/weasel)。
 
 ## 主要配置
 
