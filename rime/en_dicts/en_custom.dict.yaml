@@ -1,0 +1,19 @@
+# Rime dictionary
+# encoding: utf-8
+#
+# ------- 自定义英文词汇 -------
+#
+---
+name: en_custom
+version: "2025-12-04"
+sort: by_weight
+...
+
+Anki	Anki
+AnkiDroid	AnkiDroid
+AnkiWeb	AnkiWeb
+LTS	LTS
+Long-Term Support	LTS
+Maccy	Maccy
+Multitouch	Multitouch
+NetNewsWire	NetNewsWire

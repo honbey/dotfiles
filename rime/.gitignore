@@ -1,0 +1,24 @@
+###
+dist/
+
+build/
+sync/
+*.userdb/
+*.custom.yaml
+installation.yaml
+user.yaml
+
+rime_console
+rime_deployer
+rime_patch
+
+*temp*
+*private*
+
+# Download by update_dicts.sh
+8105.dict.yaml
+base.dict.yaml
+others.dict.yaml
+cn_en.txt
+en.dict.yaml
+en_ext.dict.yaml
