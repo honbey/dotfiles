@@ -1,2 +1,0 @@
-env/.env filter=git-crypt diff=git-crypt
-rime/custom_phrase.txt filter=git-crypt diff=git-crypt
