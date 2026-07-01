@@ -36,6 +36,7 @@ return {
         },
         sources = {
           explorer = {
+            layout = { layout = { position = "right" } },
             win = {
               list = {
                 keys = {
