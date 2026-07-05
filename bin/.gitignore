@@ -1,0 +1,3 @@
+*
+!.gitignore
+!.local/bin/rm_dangling_links
