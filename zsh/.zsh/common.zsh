@@ -24,4 +24,4 @@ setopt hist_save_no_dups
 # ENV
 [[ -f "${HOME}/.env" ]] && head -1 "${HOME}/.env" | grep -q '^# ENV' && source "${HOME}/.env"
 # Custom config for specific machine
-[[ -f "${ZSH_HOME}/.zsh.local" ]] && source "${ZSH_HOME}/.zsh.local"
+[[ -f "${HOME}/.local.zsh" ]] && source "${HOME}/.local.zsh"
