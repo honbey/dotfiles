@@ -1,0 +1,37 @@
+version: "3.9"
+
+networks:
+  local_containers:
+    external: true
+
+services:
+  code-server:
+    image: localhost/code-server:26.7.25
+    #image: codercom/code-server:latest
+    container_name: code-server
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./coder/:/root:U,Z
+      - /opt/data:/opt/data:U,Z
+      - /home/linuxbrew:/home/linuxbrew:U,Z
+      - /home/zhang/.local/share/nvim/mason/packages:/root/.local/share/nvim/mason/packages:U,Z
+    ports:
+      - 0.0.0.0:1103:8080
+      - 0.0.0.0:8988:22
+    networks:
+      local_containers:
+        ipv4_address: 10.25.11.3
+    deploy:
+      resources:
+        limits:
+          cpus: "6"
+          memory: 20G
+        reservations:
+          cpus: "1"
+          memory: 1G
+    logging:
+      driver: k8s-file
+      options:
+        max-size: "10M"
