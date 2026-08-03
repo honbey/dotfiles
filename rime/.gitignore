@@ -17,7 +17,10 @@ rime_patch
 
 custom_phrase.txt
 
-# Download by update_dicts.sh
+# Export by install.sh
+rime-*.tar.gz
+
+# Download by install.sh
 8105.dict.yaml
 base.dict.yaml
 others.dict.yaml
