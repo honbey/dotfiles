@@ -72,7 +72,7 @@ fi
 
 ### rm-improved
 # Safe rm
-alias del="rip -i --graveyard /opt/data/graveyard" trash="rip -i --graveyard /opt/data/graveyard"
+alias del="rip -i --graveyard ${HOME}/.graveyard" trash="rip -i --graveyard ${HOME}/.graveyard"
 alias rm="echo Use 'del', or the full path i.e. '/bin/rm'."
 
 ### FZF

@@ -23,7 +23,7 @@ function ap() {
 }
 _ap() {
   local -a venvs
-  local venvs=($(find /opt/data/pyvenv -mindepth 1 -maxdepth 1 -type d |
+  local venvs=($(find ${HOME}/.venv -mindepth 1 -maxdepth 1 -type d |
     awk -v FS='/' '{printf "%s\n", $NF}'))
   _describe 'virtual environments' venvs
 }
@@ -51,14 +51,13 @@ alias pip='pip3'
 
 ### Rust
 if type rustup &>/dev/null; then
-  export RUSTPATH="${DATA_DIR}/rust"
-  export CARGO_HOME="${RUSTPATH}/cargo"
-  export RUSTUP_HOME="${RUSTPATH}/rustup"
+  export CARGO_HOME="${HOME}/.cargo"
+  export RUSTUP_HOME="${HOME}/.rustup"
   add_path "${CARGO_HOME}/bin"
 fi
 
 ### Golang
 if type go &>/dev/null; then
-  export GOPATH="${DATA_DIR}/go"
+  export GOPATH="${HOME}/.go"
   add_path "${GOPATH}/bin"
 fi

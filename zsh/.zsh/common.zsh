@@ -1,5 +1,6 @@
-export LANG=en_US.UTF-8
-export LC_ALL=en_US.UTF-8
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+export LANGUAGE=C.UTF-8
 
 # Emacs-like keymaps
 bindkey -e
@@ -22,6 +23,6 @@ setopt hist_reduce_blanks
 setopt hist_save_no_dups
 
 # ENV
-[[ -f "${HOME}/.env" ]] && head -1 "${HOME}/.env" | grep -q '^# ENV' && source "${HOME}/.env"
+[[ -f "${HOME}/.env" ]] && source "${HOME}/.env"
 # Custom config for specific machine
 [[ -f "${HOME}/.local.zsh" ]] && source "${HOME}/.local.zsh"
