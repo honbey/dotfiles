@@ -8,22 +8,21 @@
 local M = {}
 
 function M.init(env)
-	local config = env.engine.schema.config
-	env.name_space = env.name_space:gsub("^*", "")
+    local config = env.engine.schema.config
+    env.name_space = env.name_space:gsub("^*", "")
 
-	-- 要降低到的位置
-	M.idx = config:get_int(env.name_space .. "/idx")
+    -- 要降低到的位置
+    M.idx = config:get_int(env.name_space .. "/idx")
 
     -- 所有 3~4 位长度、前 2~3 位是完整拼音、最后一位是声母的单词
-  -- stylua: ignore
-  local all = { "aid", "aim", "air", "and", "ann", "ant", "any", "bad", "bag", "bail", "bait", "bam", "ban", "band",
-        "bang", "bank", "bans", "bar", "bat", "bay", "bend", "benq", "bent", "benz", "bib", "bid", "bien", "big", "bin",
+    local all = { "aid", "aim", "air", "and", "ann", "ant", "any", "bad", "bag", "bail", "bait", "bam", "ban", "band",
+        "bang", "bank", "bans", "bar", "bat", "bay", "bend", "benq", "bent", "benz", "bib", "bid", "bien", "big", "bin", "bog",
         "bind", "bit", "biz", "bob", "boc", "bop", "bos", "bot", "bow", "box", "boy", "bud", "buf", "bug", "bus",
         "but", "buy", "cab", "cad", "cain", "cam", "can", "cans", "cant", "cap", "car", "cat", "cef", "cen",
         "cent", "chad", "chan", "chap", "char", "chat", "chef", "chen", "cher", "chew", "chic", "chin", "chip", "chit",
         "coup", "cum", "cunt", "cup", "cur", "cut", "dab", "dad", "dag", "dal", "dam", "day", "def", "del", "den",
         "dent", "deny", "der", "dew", "dial", "did", "died", "dies", "diet", "dig", "dim", "din", "dip", "dir", "dis",
-        "dit", "diy", "doug", "dub", "dug", "dun", "dunn", "don", "end", "err", "fab", "fan", "fans", "faq", "far", "fat",
+        "dit", "diy", "doug", "dub", "dug", "dun", "dunn", "don", "end", "err", "fab", "fan", "fans", "faq", "far", "fat", "fend",
         "fax", "fob", "fog", "for", "foul", "four", "fox", "fun", "fur", "gag", "gail", "gain", "gal", "gam", "gan",
         "gang", "gank", "gaol", "gap", "gas", "gay", "ged", "gel", "gem", "gen", "ger", "get", "guam", "guid", "gum",
         "gun", "guns", "gus", "gut", "guy", "had", "hail", "hair", "ham", "han", "hand", "hang", "hank", "hans", "has",
@@ -55,62 +54,62 @@ function M.init(env)
         "eg",
         "my", "mt", "dj", "as", "js", "cs", "ak", "ps", "cd", "cn", "hk", "bt", "pk", "ml"
     }
-	M.all = {}
-	for _, v in ipairs(all) do
-		M.all[v] = true
-	end
+    M.all = {}
+    for _, v in ipairs(all) do
+        M.all[v] = true
+    end
 
-	-- 自定义
-	M.words = {}
-	local list = config:get_list(env.name_space .. "/words")
-	local listSize = list and list.size or 0
-	for i = 0, listSize - 1 do
-		local word = list:get_value_at(i).value
-		M.words[word] = true
-	end
+    -- 自定义
+    M.words = {}
+    local list = config:get_list(env.name_space .. "/words")
+    local listSize = list and list.size or 0
+    for i = 0, listSize - 1 do
+        local word = list:get_value_at(i).value
+        M.words[word] = true
+    end
 
-	-- 模式
-	local mode = config:get_string(env.name_space .. "/mode")
-	if mode == "custom" then
-		M.map = M.words
-	elseif mode == "none" then
-		M.map = {}
-	else -- 默认 mode 为 all 且合并 M.all 和 words
-		for key in pairs(M.words) do
-			M.all[key] = true
-		end
-		M.map = M.all
-	end
+    -- 模式
+    local mode = config:get_string(env.name_space .. "/mode")
+    if mode == "custom" then
+        M.map = M.words
+    elseif mode == "none" then
+        M.map = {}
+    else -- 默认 mode 为 all 且合并 M.all 和 words
+        for key in pairs(M.words) do
+            M.all[key] = true
+        end
+        M.map = M.all
+    end
 end
 
 function M.func(input, env)
-	-- filter start
-	local code = env.engine.context.input
-	if M.map[code] then
-		local pending_cands = {}
-		local index = 0
-		for cand in input:iter() do
-			index = index + 1
-			-- 找到要降低的英文词，加入 pending_cands
-			if cand.preedit:find(" ") or not cand.text:match("[a-zA-Z]") or cand.type == "user_table" then
-				yield(cand)
-			else
-				table.insert(pending_cands, cand)
-			end
-			if index >= M.idx + #pending_cands - 1 then
-				break
-			end
-		end
-		-- 将pending_cands按顺序输出
-		for _, cand in ipairs(pending_cands) do
-			yield(cand)
-		end
-	end
+    -- filter start
+    local code = env.engine.context.input
+    if M.map[code] then
+        local pending_cands = {}
+        local index = 0
+        for cand in input:iter() do
+            index = index + 1
+            -- 找到要降低的英文词，加入 pending_cands
+            if cand.preedit:find(" ") or not cand.text:match("[a-zA-Z]") or cand.type == "user_table" then
+                yield(cand)
+            else
+                table.insert(pending_cands, cand)
+            end
+            if index >= M.idx + #pending_cands - 1 then
+                break
+            end
+        end
+        -- 将pending_cands按顺序输出
+        for _, cand in ipairs(pending_cands) do
+            yield(cand)
+        end
+    end
 
-	-- yield other
-	for cand in input:iter() do
-		yield(cand)
-	end
+    -- yield other
+    for cand in input:iter() do
+        yield(cand)
+    end
 end
 
 return M
