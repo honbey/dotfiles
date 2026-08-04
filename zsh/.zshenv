@@ -1,3 +1,3 @@
-export DATA_DIR="/opt/data"
-export WORKSPACE="${DATA_DIR}/workspace"
-export RESOURCES="${DATA_DIR}/resources"
+export DATA_DIR="${HOME}/data"
+export WORKSPACE="${HOME}/workspace"
+export RESOURCES="${HOME}/resources"
