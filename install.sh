@@ -5,7 +5,6 @@ set -euo pipefail
 # or use: ` stow pkg -t ~`
 # stow # stow itself individually
 PACKAGES+=(
-  bin
   zsh ssh tmux ghostty
   git sqlite podman
   vim nvim
