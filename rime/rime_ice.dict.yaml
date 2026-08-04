@@ -3,7 +3,7 @@
 
 ---
 name: rime_ice
-version: "2025-12-02"
+version: "2026-01-26"
 import_tables:
   - cn_dicts/custom   # 自定义词库
   - cn_dicts/8105     # 字表
