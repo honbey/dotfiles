@@ -57,11 +57,17 @@ set -- $(
 
 while getopts "hnd:D:" opt; do
   case "${opt}" in
-  h) usage; exit 0 ;;
+  h)
+    usage
+    exit 0
+    ;;
   n) DRY_RUN=true ;;
   d) DIR="${OPTARG}" ;;
   D) MAX_DEPTH="${OPTARG}" ;;
-  *) usage; exit 1 ;;
+  *)
+    usage
+    exit 1
+    ;;
   esac
 done
 
@@ -100,7 +106,7 @@ function list_dangling() {
 # Probe /dev/tty inside a function so the outer 2>/dev/null silences
 # bash's own error message when the open fails.
 function check_tty() {
-  exec 3<> /dev/tty
+  exec 3<>/dev/tty
 }
 
 function main() {
@@ -122,7 +128,7 @@ function main() {
     # Read confirmation from /dev/tty: the loop's stdin is the scan pipe,
     # reading it here would swallow the next scanned link.
     printf "  remove %s? [y/N] " "${f}"
-    if read -r answer < /dev/tty && [[ "${answer}" =~ ^[Yy]$ ]]; then
+    if read -r answer </dev/tty && [[ "${answer}" =~ ^[Yy]$ ]]; then
       rm -- "${f}"
       removed=$((removed + 1))
     else

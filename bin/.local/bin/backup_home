@@ -35,7 +35,7 @@ Options:
   -l N, --mx-level N        7z compression level 0-9 (default: 1)
   -s SIZE, --split-size SIZE
                             7z volume size with unit b/k/m/g (e.g. 4g, 512m);
-                            --split-size alone defaults to 20g; off by default
+                            split into volumes; off by default
   -g, --generate-excluded   Generate ~/.backup_excluded template and exit
   -G, --generate-metadata   Generate ~/.backup_metadata (needs root/sudo) and exit
   -h, --help                Show this help
@@ -77,12 +77,8 @@ TAR_PATHS=(
 
 # Map long options to short ones before getopts.
 # Use printf instead of echo: a bare "-n" would be swallowed by echo.
-# --split-size peeks the next arg: a size value is consumed, otherwise
-# the default 20g applies (explicit -s SIZE also works).
 set -- $(
-  args=("$@")
-  for ((i = 0; i < ${#args[@]}; i++)); do
-    arg="${args[i]}"
+  for arg in "$@"; do
     case "${arg}" in
     --help) printf '%s\n' "-h" ;;
     --first-run) printf '%s\n' "-f" ;;
@@ -93,14 +89,7 @@ set -- $(
     --mx-level=*) printf '%s\n' "-l ${arg#*=}" ;;
     --mx-level) printf '%s\n' "-l" ;;
     --split-size=*) printf '%s\n' "-s ${arg#*=}" ;;
-    --split-size)
-      if ((i + 1 < ${#args[@]})) && [[ "${args[i + 1]}" =~ ^[1-9][0-9]*[bkmg]?$ ]]; then
-        printf '%s\n' "-s ${args[i + 1]}"
-        ((i++))
-      else
-        printf '%s\n' "-s 20g"
-      fi
-      ;;
+    --split-size) printf '%s\n' "-s" ;;
     *) printf '%s\n' "${arg}" ;;
     esac
   done
@@ -108,14 +97,20 @@ set -- $(
 
 while getopts "ho:l:fs:gG" opt; do
   case "${opt}" in
-  h) usage; exit 0 ;;
+  h)
+    usage
+    exit 0
+    ;;
   f) FIRST_RUN=true ;;
   g) GEN_EXCLUDED=true ;;
   G) GEN_METADATA=true ;;
   o) OUT_DIR="${OPTARG}" ;;
   l) MX_LEVEL="${OPTARG}" ;;
   s) SPLIT_SIZE="${OPTARG}" ;;
-  *) usage; exit 1 ;;
+  *)
+    usage
+    exit 1
+    ;;
   esac
 done
 
@@ -137,7 +132,7 @@ function generate_excluded() {
     err "${target} already exists; delete it first to regenerate"
     exit 1
   fi
-  cat > "${target}" <<'EOF'
+  cat >"${target}" <<'EOF'
 .cache
 .local/share/containers
 .local/share/Trash
@@ -185,9 +180,9 @@ function generate_metadata() {
   fi
   local machine_id=""
   if [[ -r /etc/machine-id ]]; then
-    machine_id="$(tr -d '\n' < /etc/machine-id)"
+    machine_id="$(tr -d '\n' </etc/machine-id)"
   elif [[ -r /var/lib/dbus/machine-id ]]; then
-    machine_id="$(tr -d '\n' < /var/lib/dbus/machine-id)"
+    machine_id="$(tr -d '\n' </var/lib/dbus/machine-id)"
   fi
   local board_serial product_uuid fallback_id
   board_serial="$(cat /sys/class/dmi/id/board_serial 2>/dev/null || true)"
@@ -204,7 +199,7 @@ function generate_metadata() {
     echo "/etc/machine-id: ${machine_id}"
     echo "/sys/class/dmi/id/board_serial: ${board_serial}"
     echo "/sys/class/dmi/id/product_uuid: ${product_uuid}"
-  } > "${target}"
+  } >"${target}"
   info "generated ${target}"
 }
 

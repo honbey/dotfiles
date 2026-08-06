@@ -53,16 +53,17 @@ Examples:
 EOF
 }
 
-# Map long options to short ones before getopts
+# Map long options to short ones before getopts.
+# Use printf instead of echo: a bare "-n" would be swallowed by echo.
 set -- $(
   for arg in "$@"; do
     case "${arg}" in
-    --first-run) echo "-F" ;;
-    --dir) echo "-d" ;;
-    --dry-run) echo "-n" ;;
-    --verbose) echo "-v" ;;
-    --help) echo "-h" ;;
-    *) echo "${arg}" ;;
+    --first-run) printf '%s\n' "-F" ;;
+    --dir) printf '%s\n' "-d" ;;
+    --dry-run) printf '%s\n' "-n" ;;
+    --verbose) printf '%s\n' "-v" ;;
+    --help) printf '%s\n' "-h" ;;
+    *) printf '%s\n' "${arg}" ;;
     esac
   done
 )
