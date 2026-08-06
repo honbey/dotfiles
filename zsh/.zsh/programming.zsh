@@ -53,8 +53,6 @@ alias pip='pip3'
 if type rustup &>/dev/null; then
   export CARGO_HOME="${HOME}/.cargo"
   export RUSTUP_HOME="${HOME}/.rustup"
-  export RUSTUP_DIST_SERVER="https://rsproxy.cn"
-  export RUSTUP_UPDATE_ROOT="https://rsproxy.cn/rustup"
   export CARGO_NET_GIT_FETCH_WITH_CLI=true
   export CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
   if [[ -f "${CARGO_HOME}/bin/sccache" ]]; then
@@ -64,6 +62,48 @@ if type rustup &>/dev/null; then
     add_path "${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin"
   fi
   add_path "${CARGO_HOME}/bin"
+
+  # Set mirror of Rust to escalate download speed.
+  #   $1 string: mirror's name, support lists: ["official"(default), "rsproxy", "tuna", "ustc", "ali"]
+  #   *return null
+  function rust_mirror_on() {
+    local mirror="${1:-official}"
+    case "${mirror}" in
+    official)
+      ln -sfn "config.toml.official" "${HOME}/.cargo/config.toml"
+      unset RUSTUP_DIST_SERVER RUSTUP_UPDATE_ROOT
+      ;;
+    rsproxy)
+      ln -sfn "config.toml.rsproxy" "${HOME}/.cargo/config.toml"
+      export RUSTUP_DIST_SERVER="https://rsproxy.cn"
+      export RUSTUP_UPDATE_ROOT="https://rsproxy.cn/rustup"
+      ;;
+    tuna)
+      ln -sfn "config.toml.tuna" "${HOME}/.cargo/config.toml"
+      export RUSTUP_DIST_SERVER="https://mirrors.tuna.tsinghua.edu.cn/rustup"
+      export RUSTUP_UPDATE_ROOT="https://mirrors.tuna.tsinghua.edu.cn/rustup"
+      ;;
+    ustc)
+      ln -sfn "config.toml.ustc" "${HOME}/.cargo/config.toml"
+      export RUSTUP_DIST_SERVER="https://mirrors.ustc.edu.cn/rust-static"
+      export RUSTUP_UPDATE_ROOT="https://mirrors.ustc.edu.cn/rust-static"
+      ;;
+    ali)
+      ln -sfn "config.toml.ali" "${HOME}/.cargo/config.toml"
+      ;;
+    *)
+      echo 'Please provide mirror name, only support "official", "rsproxy", "tuna", "ustc" or "ali" now.'
+      ;;
+    esac
+  }
+
+  # Switch Rust back to official sources.
+  #   *return null
+  function rust_mirror_off() {
+    rust_mirror_on official
+  }
+
+  rust_mirror_on rsproxy
 fi
 
 ### Golang
