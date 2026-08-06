@@ -65,7 +65,7 @@ GEN_METADATA=false
 TAR_PATHS=(
   .backup_excluded .backup_metadata
   .env .ssh .sqliterc .startup .stow-global-ignore .gnupg .graveyard
-  .cargo .npmrc .config/pip .config/uv
+  .cargo .npmrc .config/pip
   .gitconfig .local.gitconfig
   .vim .vimrc
   .config/nvim .local/share/nvim .local/state/nvim
