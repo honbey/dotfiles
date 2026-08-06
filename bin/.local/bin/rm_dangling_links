@@ -1,3 +1,142 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-find . -maxdepth 1 -type l ! -exec test -e {} \; -print -ok rm {} \;
+# Colors for output（与仓库根 install.sh 风格一致）
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+function info() { echo -e "${GREEN}[INFO]${NC}  $*"; }
+function warn() { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+function err() { echo -e "${RED}[ERROR]${NC} $*"; }
+function step() { echo -e "${CYAN}[STEP]${NC}  $*"; }
+
+function usage() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Remove dangling symbolic links (broken links).
+
+Options:
+  -d DIR, --directory DIR  Directory to scan (default: .)
+  -D N, --max-depth N      Max depth of links to scan (default: 1)
+  -n, --dry-run            List dangling links without removing them
+  -h, --help               Show this help
+
+Uses fd if available, falls back to find.
+
+Examples:
+  $(basename "$0")                      # scan . at depth 1, confirm each removal
+  $(basename "$0") -n                   # preview only
+  $(basename "$0") -d ~/app -D 3        # scan ~/app up to depth 3
+  $(basename "$0") --directory=~/app -n # same as above, dry run
+EOF
+}
+
+DIR="."
+MAX_DEPTH=1
+DRY_RUN=false
+
+# Map long options to short ones before getopts.
+# Use printf instead of echo: a bare "-n" would be swallowed by echo.
+set -- $(
+  for arg in "$@"; do
+    case "${arg}" in
+    --help) printf '%s\n' "-h" ;;
+    --dry-run) printf '%s\n' "-n" ;;
+    --directory=*) printf '%s\n' "-d ${arg#*=}" ;;
+    --directory) printf '%s\n' "-d" ;;
+    --max-depth=*) printf '%s\n' "-D ${arg#*=}" ;;
+    --max-depth) printf '%s\n' "-D" ;;
+    *) printf '%s\n' "${arg}" ;;
+    esac
+  done
+)
+
+while getopts "hnd:D:" opt; do
+  case "${opt}" in
+  h) usage; exit 0 ;;
+  n) DRY_RUN=true ;;
+  d) DIR="${OPTARG}" ;;
+  D) MAX_DEPTH="${OPTARG}" ;;
+  *) usage; exit 1 ;;
+  esac
+done
+
+if ! [[ "${MAX_DEPTH}" =~ ^[0-9]+$ ]]; then
+  err "invalid --max-depth: ${MAX_DEPTH} (expected a non-negative integer)"
+  exit 1
+fi
+
+DIR="${DIR/#\~/$HOME}"
+if [[ ! -d "${DIR}" ]]; then
+  err "directory not found: ${DIR}"
+  exit 1
+fi
+cd "${DIR}"
+
+# List all symbolic links under the current directory.
+# Prefer fd; fall back to find when fd is unavailable.
+function list_links() {
+  if command -v fd >/dev/null 2>&1; then
+    fd -t l --max-depth "${MAX_DEPTH}" --no-ignore .
+  else
+    find . -maxdepth "${MAX_DEPTH}" -type l
+  fi
+}
+
+# List dangling links: a symlink whose target does not exist.
+function list_dangling() {
+  local f
+  while IFS= read -r f; do
+    if ! test -e "${f}"; then
+      echo "${f}"
+    fi
+  done < <(list_links)
+}
+
+# Probe /dev/tty inside a function so the outer 2>/dev/null silences
+# bash's own error message when the open fails.
+function check_tty() {
+  exec 3<> /dev/tty
+}
+
+function main() {
+  local f found=0 removed=0 answer
+
+  if ! ${DRY_RUN} && ! check_tty 2>/dev/null; then
+    err "no interactive terminal for confirmation; use -n/--dry-run to preview"
+    exit 1
+  fi
+  exec 3>&-
+
+  step "Scanning ${DIR} (max depth ${MAX_DEPTH}) for dangling links..."
+  while IFS= read -r f; do
+    found=$((found + 1))
+    if ${DRY_RUN}; then
+      warn "would remove: ${f}"
+      continue
+    fi
+    # Read confirmation from /dev/tty: the loop's stdin is the scan pipe,
+    # reading it here would swallow the next scanned link.
+    printf "  remove %s? [y/N] " "${f}"
+    if read -r answer < /dev/tty && [[ "${answer}" =~ ^[Yy]$ ]]; then
+      rm -- "${f}"
+      removed=$((removed + 1))
+    else
+      warn "skipped: ${f}"
+    fi
+  done < <(list_dangling)
+
+  if [[ ${found} -eq 0 ]]; then
+    info "no dangling links found"
+  elif ${DRY_RUN}; then
+    info "found ${found} dangling links (dry run, nothing removed)"
+  else
+    info "removed ${removed} of ${found} dangling links"
+  fi
+}
+
+main
