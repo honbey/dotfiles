@@ -30,4 +30,4 @@ _darcs
 
 .*\.bak
 .*\.example
-.*\.local\.template
+.*\.local\..*\.template
