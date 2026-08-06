@@ -1,13 +1,21 @@
 # Generate random passphrase
 #   $1 int: passphrase length
-#   $2 string: passphrase charset
+#   $2 string: charset preset (safe|alnum|symbols, default safe) or a custom charset
 #   $3 string: whether to hash passphrase
 #   $4 string: provide specfic salt
 #   *return string: passphrase or hashed
 function generate_passwd() {
   local length charset hashed salt openssl_existed
   length="${1:-16}"
-  charset="${2:-A-Za-z0-9!&^._}" # A-Za-z0-9!@#$%^&*()_+{}[]|:;<>,.?~
+  # Presets: safe = unambiguous letters+digits (default),
+  # alnum = full letters+digits, symbols = letters+digits+symbols.
+  # Any other value is used as a custom charset directly.
+  case "${2:-safe}" in
+    safe)    charset="23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz" ;;
+    alnum)   charset="A-Za-z0-9" ;;
+    symbols) charset="A-Za-z0-9!@#$%^&*()_+{}[]|:;<>,.?~" ;;
+    *)       charset="$2" ;;
+  esac
   type openssl &>/dev/null && openssl_existed=true || openssl_existed=""
   [[ -n "$3" && "${openssl_existed}" ]] && hashed=true || hashed=""
   [[ -n "$4" && "${hashed}" ]] && salt="$4" || salt=""
@@ -19,6 +27,8 @@ function generate_passwd() {
     else
       openssl passwd -5 "${passphrase}"
     fi
+  else
+    echo
   fi
 }
 alias generate_password='generate_passwd'
