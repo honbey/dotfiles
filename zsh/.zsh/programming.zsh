@@ -28,25 +28,42 @@ _ap() {
   _describe 'virtual environments' venvs
 }
 compdef _ap ap
-# Pip
-# Use mirror to speed pip.
-#   $1 string: name of mirrors
-#   $2... string: other params to pip
+# Set mirror of Python (pip & uv) to escalate download speed.
+#   $1 string: mirror's name, support lists: ["official"(default), "tsinghua", "ustc", "ali"]
 #   *return null
-function pipm() {
-  if [[ -z "$1" ]]; then
-    pip3 -i https://pypi.tuna.tsinghua.edu.cn/simple "$@"
-  else
-    shift
-    if [[ "$1" == 'tsinghua' ]]; then
-      pip3 -i https://pypi.tuna.tsinghua.edu.cn/simple "$@"
-    elif [[ "$1" == 'ustc' ]]; then
-      pip3 -i https://mirrors.ustc.edu.cn/pypi/simple "$@"
-    elif [[ "$1" == 'ali' ]]; then
-      pip3 -i https://mirrors.aliyun.com/pypi/simple "$@"
-    fi
-  fi
+function pip_mirror_on() {
+  local mirror="${1:-official}"
+  case "${mirror}" in
+  official)
+    unset PIP_INDEX_URL UV_DEFAULT_INDEX UV_INDEX_URL ;;
+  tsinghua)
+    export PIP_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
+    export UV_DEFAULT_INDEX="https://pypi.tuna.tsinghua.edu.cn/simple"
+    export UV_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple" ;;
+  ustc)
+    export PIP_INDEX_URL="https://mirrors.ustc.edu.cn/pypi/simple"
+    export UV_DEFAULT_INDEX="https://mirrors.ustc.edu.cn/pypi/simple"
+    export UV_INDEX_URL="https://mirrors.ustc.edu.cn/pypi/simple" ;;
+  ali)
+    export PIP_INDEX_URL="https://mirrors.aliyun.com/pypi/simple"
+    export UV_DEFAULT_INDEX="https://mirrors.aliyun.com/pypi/simple"
+    export UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple" ;;
+  *)
+    echo 'Please provide mirror name, only support "official", "tsinghua", "ustc" or "ali" now.' ;;
+  esac
 }
+
+# Switch Python back to official sources.
+#   *return null
+function pip_mirror_off() {
+  pip_mirror_on official
+}
+
+# uv reuses the pip mirror settings.
+alias uv_mirror_on="pip_mirror_on"
+alias uv_mirror_off="pip_mirror_off"
+
+pip_mirror_on tsinghua
 alias pip='pip3'
 
 ### Rust
