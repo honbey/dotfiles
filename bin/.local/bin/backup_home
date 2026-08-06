@@ -21,7 +21,7 @@ Backup the home directory: pack selected paths with tar, then compress
 with 7zz (fallback: 7z) into an encrypted 7z archive.
 
 Uses GNU tar incremental mode (-g/--listed-incremental): the first run
-(-f) creates a full backup and a snapshot; later runs only pack changes.
+(-F) creates a full backup and a snapshot; later runs only pack changes.
 
 Output file names:
   home_<user>-<machine-id8>-<date>.tar   (raw tar archive)
@@ -30,7 +30,7 @@ Output file names:
   home_<user>-<machine-id8>-<date>.snap  (snapshot copy for restore)
 
 Options:
-  -f, --first-run           Initial full backup (creates the snapshot)
+  -F, --first-run           Initial full backup (creates the snapshot)
   -o DIR, --output-dir DIR  Output directory (default: .)
   -l N, --mx-level N        7z compression level 0-9 (default: 1)
   -s SIZE, --split-size SIZE
@@ -47,7 +47,7 @@ Restore (in order, oldest first; extract each .7z first):
   # split archive: 7zz x <date>.7z.001  (reads all volumes)
 
 Examples:
-  $(basename "$0") -f                      # first full backup
+  $(basename "$0") -F                      # first full backup
   $(basename "$0")                         # incremental backup
   $(basename "$0") -o /backup -l 5         # output dir + mx level 5
   $(basename "$0") -s 4g                   # split into 4G volumes
@@ -81,7 +81,7 @@ set -- $(
   for arg in "$@"; do
     case "${arg}" in
     --help) printf '%s\n' "-h" ;;
-    --first-run) printf '%s\n' "-f" ;;
+    --first-run) printf '%s\n' "-F" ;;
     --generate-excluded) printf '%s\n' "-g" ;;
     --generate-metadata) printf '%s\n' "-G" ;;
     --output-dir=*) printf '%s\n' "-o ${arg#*=}" ;;
@@ -95,13 +95,13 @@ set -- $(
   done
 )
 
-while getopts "ho:l:fs:gG" opt; do
+while getopts "ho:l:Fs:gG" opt; do
   case "${opt}" in
   h)
     usage
     exit 0
     ;;
-  f) FIRST_RUN=true ;;
+  F) FIRST_RUN=true ;;
   g) GEN_EXCLUDED=true ;;
   G) GEN_METADATA=true ;;
   o) OUT_DIR="${OPTARG}" ;;
@@ -241,7 +241,7 @@ SEVENZIP_FILE="${OUT_DIR}/${BASE}.7z"
 SNAP="${OUT_DIR}/home_${USER_NAME}-${MACHINE_ID}.snap"
 SNAP_COPY="${OUT_DIR}/${BASE}.snap"
 
-# Snapshot gates: -f requires no existing snapshot; incremental mode
+# Snapshot gates: -F requires no existing snapshot; incremental mode
 # requires one. A same-day rerun would overwrite the archive, so warn.
 if ${FIRST_RUN}; then
   if [[ -e "${SNAP}" ]]; then
@@ -250,12 +250,12 @@ if ${FIRST_RUN}; then
   fi
 else
   if [[ ! -e "${SNAP}" ]]; then
-    err "no snapshot found; run with -f for the initial full backup"
+    err "no snapshot found; run with -F for the initial full backup"
     exit 1
   fi
 fi
 if [[ -e "${TAR_FILE}" ]]; then
-  warn "archive ${TAR_FILE} already exists; same-day rerun overwrites it (keep the -f backup for restore)"
+  warn "archive ${TAR_FILE} already exists; same-day rerun overwrites it (keep the -F backup for restore)"
 fi
 
 step "Packing home directory to ${TAR_FILE}"

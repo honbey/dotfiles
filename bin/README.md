@@ -34,7 +34,7 @@
 基于 GNU tar 增量模式（`-g/--listed-incremental`）：首次运行生成全量备份与快照，
 之后每次只打包变化内容。
 
-- `-f, --first-run`：首次全量备份（创建快照；快照已存在时拒绝执行）
+- `-F, --first-run`：首次全量备份（创建快照；快照已存在时拒绝执行）
 - `-o DIR, --output-dir DIR`：输出目录（默认 `.`，支持 `~` 展开，自动创建）
 - `-l N, --mx-level N`：7z 压缩级别 0-9（默认 1）
 - `-s SIZE, --split-size SIZE`：7z 分卷，必须带大小（单位 `b/k/m/g`，如 `4g`；默认不分卷）
