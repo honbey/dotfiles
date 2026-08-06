@@ -21,29 +21,34 @@ elif [[ -d /home/linuxbrew/.linuxbrew ]]; then
 fi
 
 # Set mirror of Homebrew to escalate download speed.
-#   $1 string: mirror's name, support lists: ["official"(default), "tsinghua", "ustc", "ali"]
+#   $1 string: mirror's name, support lists: ["tsinghua"(default), "official", "ustc", "ali"]
 #   *return null
 function brew_mirror_on() {
   type brew &>/dev/null || (echo "Please install Homebrew!" && return)
-  local mirror="${1:-official}"
+  local mirror="${1:-tsinghua}"
   case "${mirror}" in
   official)
-    unset HOMEBREW_API_DOMAIN HOMEBREW_BOTTLE_DOMAIN HOMEBREW_PIP_INDEX_URL HOMEBREW_INSTALL_FROM_API ;;
+    unset HOMEBREW_API_DOMAIN HOMEBREW_BOTTLE_DOMAIN HOMEBREW_PIP_INDEX_URL HOMEBREW_INSTALL_FROM_API
+    ;;
   tsinghua)
     export HOMEBREW_INSTALL_FROM_API=1
     export HOMEBREW_API_DOMAIN="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles/api"
     export HOMEBREW_BOTTLE_DOMAIN="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles"
-    export HOMEBREW_PIP_INDEX_URL="https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" ;;
+    export HOMEBREW_PIP_INDEX_URL="https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
+    ;;
   ustc)
     export HOMEBREW_INSTALL_FROM_API=1
     export HOMEBREW_API_DOMAIN="https://mirrors.ustc.edu.cn/homebrew-bottles/api"
-    export HOMEBREW_BOTTLE_DOMAIN="https://mirrors.ustc.edu.cn/homebrew-bottles" ;;
+    export HOMEBREW_BOTTLE_DOMAIN="https://mirrors.ustc.edu.cn/homebrew-bottles"
+    ;;
   ali)
     export HOMEBREW_INSTALL_FROM_API=1
     export HOMEBREW_API_DOMAIN="https://mirrors.aliyun.com/homebrew-bottles/api"
-    export HOMEBREW_BOTTLE_DOMAIN="https://mirrors.aliyun.com/homebrew/homebrew-bottles" ;;
+    export HOMEBREW_BOTTLE_DOMAIN="https://mirrors.aliyun.com/homebrew/homebrew-bottles"
+    ;;
   *)
-    echo 'Please provide mirror name, only support "official", "tsinghua", "ustc" or "ali" now.' ;;
+    echo 'Please provide mirror name, only support "official", "tsinghua", "ustc" or "ali" now.'
+    ;;
   esac
 }
 
