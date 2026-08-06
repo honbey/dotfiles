@@ -20,26 +20,42 @@ Usage: $(basename "$0") [OPTIONS]
 Backup the home directory: pack selected paths with tar, then compress
 with 7zz (fallback: 7z) into an encrypted 7z archive.
 
+Uses GNU tar incremental mode (-g/--listed-incremental): the first run
+(-f) creates a full backup and a snapshot; later runs only pack changes.
+
 Output file names:
   home_<user>-<machine-id8>-<date>.tar   (raw tar archive)
-  home_<user>-<machine-id8>-<date>.7z    (encrypted 7z archive)
+  home_<user>-<machine-id8>-<date>.7z    (encrypted 7z archive, or .7z.001/.002/... when split)
+  home_<user>-<machine-id8>.snap         (snapshot, updated each run)
+  home_<user>-<machine-id8>-<date>.snap  (snapshot copy for restore)
 
 Options:
-  -o DIR, --output-dir DIR   Output directory (default: .)
-  -l N, --mx-level N         7z compression level 0-9 (default: 1)
-  -h, --help                 Show this help
+  -f, --first-run           Initial full backup (creates the snapshot)
+  -o DIR, --output-dir DIR  Output directory (default: .)
+  -l N, --mx-level N        7z compression level 0-9 (default: 1)
+  -s SIZE, --split-size SIZE
+                            7z volume size with unit b/k/m/g (e.g. 4g, 512m);
+                            --split-size alone defaults to 20g; off by default
+  -h, --help                Show this help
 
 Requires 7zz or 7z on PATH. Run from the home directory.
 
+Restore (in order, oldest first; extract each .7z first):
+  tar --listed-incremental=<date>.snap -xf <date>.tar
+  # split archive: 7zz x <date>.7z.001  (reads all volumes)
+
 Examples:
-  $(basename "$0")                     # backup to . with mx level 1
-  $(basename "$0") -o /backup -l 5     # backup to /backup, mx level 5
-  $(basename "$0") --output-dir=~/bak  # same directory style
+  $(basename "$0") -f                      # first full backup
+  $(basename "$0")                         # incremental backup
+  $(basename "$0") -o /backup -l 5         # output dir + mx level 5
+  $(basename "$0") -s 4g                   # split into 4G volumes
 EOF
 }
 
 OUT_DIR="."
 MX_LEVEL=1
+FIRST_RUN=false
+SPLIT_SIZE=""
 
 # Paths to back up, relative to $HOME (one per line, easy to extend)
 TAR_PATHS=(
@@ -57,30 +73,51 @@ TAR_PATHS=(
 
 # Map long options to short ones before getopts.
 # Use printf instead of echo: a bare "-n" would be swallowed by echo.
+# --split-size peeks the next arg: a size value is consumed, otherwise
+# the default 20g applies (explicit -s SIZE also works).
 set -- $(
-  for arg in "$@"; do
+  args=("$@")
+  for ((i = 0; i < ${#args[@]}; i++)); do
+    arg="${args[i]}"
     case "${arg}" in
     --help) printf '%s\n' "-h" ;;
+    --first-run) printf '%s\n' "-f" ;;
     --output-dir=*) printf '%s\n' "-o ${arg#*=}" ;;
     --output-dir) printf '%s\n' "-o" ;;
     --mx-level=*) printf '%s\n' "-l ${arg#*=}" ;;
     --mx-level) printf '%s\n' "-l" ;;
+    --split-size=*) printf '%s\n' "-s ${arg#*=}" ;;
+    --split-size)
+      if ((i + 1 < ${#args[@]})) && [[ "${args[i + 1]}" =~ ^[1-9][0-9]*[bkmg]?$ ]]; then
+        printf '%s\n' "-s ${args[i + 1]}"
+        ((i++))
+      else
+        printf '%s\n' "-s 20g"
+      fi
+      ;;
     *) printf '%s\n' "${arg}" ;;
     esac
   done
 )
 
-while getopts "ho:l:" opt; do
+while getopts "ho:l:fs:" opt; do
   case "${opt}" in
   h) usage; exit 0 ;;
+  f) FIRST_RUN=true ;;
   o) OUT_DIR="${OPTARG}" ;;
   l) MX_LEVEL="${OPTARG}" ;;
+  s) SPLIT_SIZE="${OPTARG}" ;;
   *) usage; exit 1 ;;
   esac
 done
 
 if ! [[ "${MX_LEVEL}" =~ ^[0-9]+$ ]] || [[ "${MX_LEVEL}" -gt 9 ]]; then
   err "invalid --mx-level: ${MX_LEVEL} (expected an integer 0-9)"
+  exit 1
+fi
+
+if [[ -n "${SPLIT_SIZE}" ]] && ! [[ "${SPLIT_SIZE}" =~ ^[1-9][0-9]*[bkmg]?$ ]]; then
+  err "invalid --split-size: ${SPLIT_SIZE} (expected e.g. 4g, 512m, 1k)"
   exit 1
 fi
 
@@ -110,6 +147,25 @@ DATE="$(date +%Y%m%d)"
 BASE="home_${USER_NAME}-${MACHINE_ID}-${DATE}"
 TAR_FILE="${OUT_DIR}/${BASE}.tar"
 SEVENZIP_FILE="${OUT_DIR}/${BASE}.7z"
+SNAP="${OUT_DIR}/home_${USER_NAME}-${MACHINE_ID}.snap"
+SNAP_COPY="${OUT_DIR}/${BASE}.snap"
+
+# Snapshot gates: -f requires no existing snapshot; incremental mode
+# requires one. A same-day rerun would overwrite the archive, so warn.
+if ${FIRST_RUN}; then
+  if [[ -e "${SNAP}" ]]; then
+    err "snapshot ${SNAP} already exists; delete it first to force a fresh full backup"
+    exit 1
+  fi
+else
+  if [[ ! -e "${SNAP}" ]]; then
+    err "no snapshot found; run with -f for the initial full backup"
+    exit 1
+  fi
+fi
+if [[ -e "${TAR_FILE}" ]]; then
+  warn "archive ${TAR_FILE} already exists; same-day rerun overwrites it (keep the -f backup for restore)"
+fi
 
 step "Packing home directory to ${TAR_FILE}"
 
@@ -125,10 +181,18 @@ done
 
 tar cf "${TAR_FILE}" \
   -C ~ \
+  -g "${SNAP}" \
   --exclude-from=.backup_excluded \
   "${VALID_PATHS[@]}"
 
-step "Compressing ${TAR_FILE} to ${SEVENZIP_FILE} (mx=${MX_LEVEL})"
-"${SEVENZIP}" a -t7z -mhe=on -p -mx="${MX_LEVEL}" "${SEVENZIP_FILE}" "${TAR_FILE}"
+# Keep a snapshot copy next to the archive so it can be restored later.
+cp "${SNAP}" "${SNAP_COPY}"
 
-info "backup done: ${SEVENZIP_FILE}"
+step "Compressing ${TAR_FILE} to ${SEVENZIP_FILE} (mx=${MX_LEVEL}${SPLIT_SIZE:+, split ${SPLIT_SIZE}})"
+if [[ -n "${SPLIT_SIZE}" ]]; then
+  "${SEVENZIP}" a -t7z -mhe=on -p -mx="${MX_LEVEL}" -v"${SPLIT_SIZE}" "${SEVENZIP_FILE}" "${TAR_FILE}"
+  info "backup done: ${SEVENZIP_FILE}.001 (+ $(ls "${SEVENZIP_FILE}".0* 2>/dev/null | wc -l) volumes)"
+else
+  "${SEVENZIP}" a -t7z -mhe=on -p -mx="${MX_LEVEL}" "${SEVENZIP_FILE}" "${TAR_FILE}"
+  info "backup done: ${SEVENZIP_FILE}"
+fi
