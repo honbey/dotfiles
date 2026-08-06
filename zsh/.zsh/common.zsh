@@ -26,3 +26,5 @@ setopt hist_save_no_dups
 [[ -f "${HOME}/.env" ]] && source "${HOME}/.env"
 # Custom config for specific machine
 [[ -f "${HOME}/.local.zsh" ]] && source "${HOME}/.local.zsh"
+# .local/bin
+[[ -d "${HOME}/.local/bin" ]] && add_path "${HOME}/.local/bin"
