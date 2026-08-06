@@ -200,7 +200,6 @@ function link_dotfiles() {
   local stow_args=()
   ${DRY_RUN} && stow_args+=("-n")
   ${VERBOSE} && stow_args+=("--verbose=2")
-  ${FIRST_RUN} && stow_args+=("-f")
 
   stow_args+=(-t "${HOME}" ${PACKAGES[@]})
 
