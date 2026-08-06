@@ -36,6 +36,8 @@ Options:
   -s SIZE, --split-size SIZE
                             7z volume size with unit b/k/m/g (e.g. 4g, 512m);
                             --split-size alone defaults to 20g; off by default
+  -g, --generate-excluded   Generate ~/.backup_excluded template and exit
+  -G, --generate-metadata   Generate ~/.backup_metadata (needs root/sudo) and exit
   -h, --help                Show this help
 
 Requires 7zz or 7z on PATH. Run from the home directory.
@@ -56,6 +58,8 @@ OUT_DIR="."
 MX_LEVEL=1
 FIRST_RUN=false
 SPLIT_SIZE=""
+GEN_EXCLUDED=false
+GEN_METADATA=false
 
 # Paths to back up, relative to $HOME (one per line, easy to extend)
 TAR_PATHS=(
@@ -82,6 +86,8 @@ set -- $(
     case "${arg}" in
     --help) printf '%s\n' "-h" ;;
     --first-run) printf '%s\n' "-f" ;;
+    --generate-excluded) printf '%s\n' "-g" ;;
+    --generate-metadata) printf '%s\n' "-G" ;;
     --output-dir=*) printf '%s\n' "-o ${arg#*=}" ;;
     --output-dir) printf '%s\n' "-o" ;;
     --mx-level=*) printf '%s\n' "-l ${arg#*=}" ;;
@@ -100,10 +106,12 @@ set -- $(
   done
 )
 
-while getopts "ho:l:fs:" opt; do
+while getopts "ho:l:fs:gG" opt; do
   case "${opt}" in
   h) usage; exit 0 ;;
   f) FIRST_RUN=true ;;
+  g) GEN_EXCLUDED=true ;;
+  G) GEN_METADATA=true ;;
   o) OUT_DIR="${OPTARG}" ;;
   l) MX_LEVEL="${OPTARG}" ;;
   s) SPLIT_SIZE="${OPTARG}" ;;
@@ -119,6 +127,94 @@ fi
 if [[ -n "${SPLIT_SIZE}" ]] && ! [[ "${SPLIT_SIZE}" =~ ^[1-9][0-9]*[bkmg]?$ ]]; then
   err "invalid --split-size: ${SPLIT_SIZE} (expected e.g. 4g, 512m, 1k)"
   exit 1
+fi
+
+# ---------- auxiliary modes (generate helper files, then exit) ----------
+
+function generate_excluded() {
+  local target="${HOME}/.backup_excluded"
+  if [[ -e "${target}" ]]; then
+    err "${target} already exists; delete it first to regenerate"
+    exit 1
+  fi
+  cat > "${target}" <<'EOF'
+.cache
+.local/share/containers
+.local/share/Trash
+.thumbnails
+
+.npm
+.cargo/registry
+.cargo/git
+
+app/web/code/.npm
+app/web/code/.cache
+
+app/ai/llama.cpp/llama.cpp/build
+app/db/valkey/data/dump.rdb
+
+workspace/*/target
+workspace/*/dist
+workspace/*/node_modules
+workspace/*/*/target
+workspace/*/*/dist
+workspace/*/*/node_modules
+workspace/*/*/*/target
+workspace/*/*/*/dist
+workspace/*/*/*/node_modules
+
+resources/models
+
+*/.gnupg/S.*
+*/gnupg.bak/S.*
+
+*.sock
+EOF
+  info "generated ${target}"
+}
+
+function generate_metadata() {
+  local target="${HOME}/.backup_metadata"
+  if [[ -e "${target}" ]]; then
+    err "${target} already exists; delete it first to regenerate"
+    exit 1
+  fi
+  if [[ "$(id -u)" -ne 0 ]]; then
+    err "generating .backup_metadata needs root (reads DMI info); rerun with sudo: sudo $(basename "$0") -G"
+    exit 1
+  fi
+  local machine_id=""
+  if [[ -r /etc/machine-id ]]; then
+    machine_id="$(tr -d '\n' < /etc/machine-id)"
+  elif [[ -r /var/lib/dbus/machine-id ]]; then
+    machine_id="$(tr -d '\n' < /var/lib/dbus/machine-id)"
+  fi
+  local board_serial product_uuid fallback_id
+  board_serial="$(cat /sys/class/dmi/id/board_serial 2>/dev/null || true)"
+  product_uuid="$(cat /sys/class/dmi/id/product_uuid 2>/dev/null || true)"
+  # Fallback for rootless containers without machine-id/DMI files:
+  # identify the run by hostname + timestamp.
+  fallback_id="$(hostname)-$(date +%Y%m%d%H%M%S)"
+  [[ -n "${machine_id}" ]] || machine_id="${fallback_id}"
+  [[ -n "${board_serial}" ]] || board_serial="${fallback_id}"
+  [[ -n "${product_uuid}" ]] || product_uuid="${fallback_id}"
+  {
+    echo "user: $(id -un)"
+    echo "hostname: $(hostname)"
+    echo "/etc/machine-id: ${machine_id}"
+    echo "/sys/class/dmi/id/board_serial: ${board_serial}"
+    echo "/sys/class/dmi/id/product_uuid: ${product_uuid}"
+  } > "${target}"
+  info "generated ${target}"
+}
+
+if ${GEN_EXCLUDED}; then
+  generate_excluded
+  exit 0
+fi
+if ${GEN_METADATA}; then
+  generate_metadata
+  exit 0
 fi
 
 OUT_DIR="${OUT_DIR/#\~/$HOME}"

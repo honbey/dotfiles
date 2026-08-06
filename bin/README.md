@@ -37,7 +37,9 @@
 - `-f, --first-run`：首次全量备份（创建快照；快照已存在时拒绝执行）
 - `-o DIR, --output-dir DIR`：输出目录（默认 `.`，支持 `~` 展开，自动创建）
 - `-l N, --mx-level N`：7z 压缩级别 0-9（默认 1）
-- `-s SIZE, --split-size SIZE`：7z 分卷，方便上传到云盘
+- `-s SIZE, --split-size SIZE`：7z 分卷（单位 `b/k/m/g`，如 `4g`；`--split-size` 不带值默认 `20g`；默认不分卷）
+- `-g, --generate-excluded`：生成 `~/.backup_excluded` 模板后退出（已存在时拒绝）
+- `-G, --generate-metadata`：生成 `~/.backup_metadata` 后退出（需 root/sudo，已存在时拒绝）
 - `-h, --help`：查看帮助
 
 产出文件（以 `root` 用户，machine-id `f85ba416` 为例）：
