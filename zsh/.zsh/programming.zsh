@@ -53,6 +53,13 @@ alias pip='pip3'
 if type rustup &>/dev/null; then
   export CARGO_HOME="${HOME}/.cargo"
   export RUSTUP_HOME="${HOME}/.rustup"
+  export RUSTUP_DIST_SERVER="https://rsproxy.cn"
+  export RUSTUP_UPDATE_ROOT="https://rsproxy.cn/rustup"
+  export CARGO_NET_GIT_FETCH_WITH_CLI=true
+  export CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+  if [[ -f "${CARGO_HOME}/bin/sccache" ]]; then
+    export CARGO_BUILD_RUSTC_WRAPPER="${CARGO_HOME}/bin/sccache"
+  fi
   add_path "${CARGO_HOME}/bin"
 fi
 
@@ -60,4 +67,10 @@ fi
 if type go &>/dev/null; then
   export GOPATH="${HOME}/.go"
   add_path "${GOPATH}/bin"
+fi
+
+### OpenCode
+if type opencode &>/dev/null; then
+  export OPENCODE_DISABLE_LSP_DOWNLOAD=true
+  export OPENCODE_DISABLE_CLAUDE_CODE=1
 fi
