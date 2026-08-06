@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Colors for output（与仓库根 install.sh 风格一致）
+# Colors for output (matching the style of the root install.sh)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
