@@ -60,6 +60,9 @@ if type rustup &>/dev/null; then
   if [[ -f "${CARGO_HOME}/bin/sccache" ]]; then
     export CARGO_BUILD_RUSTC_WRAPPER="${CARGO_HOME}/bin/sccache"
   fi
+  if [[ -d "${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu" && "${OSTYPE}" == "linux-gnu" ]]; then
+    add_path "${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin"
+  fi
   add_path "${CARGO_HOME}/bin"
 fi
 
