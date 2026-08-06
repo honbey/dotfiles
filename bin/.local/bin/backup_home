@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Colors for output（与仓库根 install.sh 风格一致）
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+function info() { echo -e "${GREEN}[INFO]${NC}  $*"; }
+function warn() { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+function err() { echo -e "${RED}[ERROR]${NC} $*"; }
+function step() { echo -e "${CYAN}[STEP]${NC}  $*"; }
+
+function usage() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Backup the home directory: pack selected paths with tar, then compress
+with 7zz (fallback: 7z) into an encrypted 7z archive.
+
+Output file names:
+  home_<user>-<machine-id8>-<date>.tar   (raw tar archive)
+  home_<user>-<machine-id8>-<date>.7z    (encrypted 7z archive)
+
+Options:
+  -o DIR, --output-dir DIR   Output directory (default: .)
+  -l N, --mx-level N         7z compression level 0-9 (default: 1)
+  -h, --help                 Show this help
+
+Requires 7zz or 7z on PATH. Run from the home directory.
+
+Examples:
+  $(basename "$0")                     # backup to . with mx level 1
+  $(basename "$0") -o /backup -l 5     # backup to /backup, mx level 5
+  $(basename "$0") --output-dir=~/bak  # same directory style
+EOF
+}
+
+OUT_DIR="."
+MX_LEVEL=1
+
+# Paths to back up, relative to $HOME (one per line, easy to extend)
+TAR_PATHS=(
+  .backup_excluded .backup_metadata
+  .env .ssh .sqliterc .startup .stow-global-ignore .gnupg .graveyard
+  .cargo .npmrc .config/pip .config/uv
+  .gitconfig .local.gitconfig
+  .vim .vimrc
+  .config/nvim .local/share/nvim .local/state/nvim
+  .zsh .zsh_history .zshenv .zshrc .local.zsh .local/share/zinit
+  .config/containers .config/ghostty .config/tmux
+  .local/share/zoxide
+  Downloads app data dotfiles kb resources workspace
+)
+
+# Map long options to short ones before getopts.
+# Use printf instead of echo: a bare "-n" would be swallowed by echo.
+set -- $(
+  for arg in "$@"; do
+    case "${arg}" in
+    --help) printf '%s\n' "-h" ;;
+    --output-dir=*) printf '%s\n' "-o ${arg#*=}" ;;
+    --output-dir) printf '%s\n' "-o" ;;
+    --mx-level=*) printf '%s\n' "-l ${arg#*=}" ;;
+    --mx-level) printf '%s\n' "-l" ;;
+    *) printf '%s\n' "${arg}" ;;
+    esac
+  done
+)
+
+while getopts "ho:l:" opt; do
+  case "${opt}" in
+  h) usage; exit 0 ;;
+  o) OUT_DIR="${OPTARG}" ;;
+  l) MX_LEVEL="${OPTARG}" ;;
+  *) usage; exit 1 ;;
+  esac
+done
+
+if ! [[ "${MX_LEVEL}" =~ ^[0-9]+$ ]] || [[ "${MX_LEVEL}" -gt 9 ]]; then
+  err "invalid --mx-level: ${MX_LEVEL} (expected an integer 0-9)"
+  exit 1
+fi
+
+OUT_DIR="${OUT_DIR/#\~/$HOME}"
+mkdir -p "${OUT_DIR}"
+
+# Prefer 7zz, fall back to 7z; abort early if neither is available.
+SEVENZIP=""
+if command -v 7zz >/dev/null 2>&1; then
+  SEVENZIP="7zz"
+elif command -v 7z >/dev/null 2>&1; then
+  SEVENZIP="7z"
+else
+  err "neither 7zz nor 7z found on PATH; install p7zip first"
+  exit 1
+fi
+
+# machine id: first 8 chars of the /etc/machine-id line in ~/.backup_metadata
+MACHINE_ID="$(awk -F': ' '/\/etc\/machine-id:/{print $2}' ~/.backup_metadata | cut -c1-8)"
+if [[ -z "${MACHINE_ID}" ]]; then
+  err "cannot read machine id from ~/.backup_metadata"
+  exit 1
+fi
+
+USER_NAME="$(id -un)"
+DATE="$(date +%Y%m%d)"
+BASE="home_${USER_NAME}-${MACHINE_ID}-${DATE}"
+TAR_FILE="${OUT_DIR}/${BASE}.tar"
+SEVENZIP_FILE="${OUT_DIR}/${BASE}.7z"
+
+step "Packing home directory to ${TAR_FILE}"
+
+# Validate paths first; warn about missing ones instead of letting tar fail midway.
+VALID_PATHS=()
+for p in "${TAR_PATHS[@]}"; do
+  if [[ -e "${HOME}/${p}" ]]; then
+    VALID_PATHS+=("${p}")
+  else
+    warn "skipping missing path: ${p}"
+  fi
+done
+
+tar cf "${TAR_FILE}" \
+  -C ~ \
+  --exclude-from=.backup_excluded \
+  "${VALID_PATHS[@]}"
+
+step "Compressing ${TAR_FILE} to ${SEVENZIP_FILE} (mx=${MX_LEVEL})"
+"${SEVENZIP}" a -t7z -mhe=on -p -mx="${MX_LEVEL}" "${SEVENZIP_FILE}" "${TAR_FILE}"
+
+info "backup done: ${SEVENZIP_FILE}"

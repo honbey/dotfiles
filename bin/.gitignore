@@ -1,3 +1,7 @@
 *
+!README.md
 !.gitignore
+!.local/
+!.local/bin/
 !.local/bin/rm_dangling_links
+!.local/bin/backup_home
