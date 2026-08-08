@@ -14,7 +14,7 @@ services:
   studio:
     container_name: supabase-studio
     #image: supabase/studio:2026.08.03-sha-022b374
-    image: docker.cnb.cool/honbey/cnb-dev-env/studio:latest
+    image: quay.io/topthink/tests/supabase-studio:26.8.8-patch-ifnull
     restart: unless-stopped
     healthcheck:
       test:
