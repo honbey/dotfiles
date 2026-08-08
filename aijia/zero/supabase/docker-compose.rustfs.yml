@@ -1,6 +1,6 @@
 services:
-
   rustfs:
+    container_name: supabase-rustfs
     image: rustfs/rustfs:1.0.0-beta.11
     environment:
       RUSTFS_ACCESS_KEY: ${MINIO_ROOT_USER}
@@ -11,14 +11,20 @@ services:
     security_opt:
       - "no-new-privileges:true"
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://rustfs:9000/health" ]
+      test: ["CMD", "curl", "-f", "http://rustfs:9000/health"]
       interval: 2s
       timeout: 10s
       retries: 5
     volumes:
       - rustfs-data:/data
+    logging:
+      driver: k8s-file
+      options:
+        max-size: "10M"
+        # path: /home/zhang/data/logs/supabase/rustfs.log
 
   rustfs-createbucket:
+    container_name: supabase-rustfs-rc
     image: rustfs/rc
     depends_on:
       rustfs:
@@ -28,18 +34,21 @@ services:
       rc alias set supa-rustfs http://rustfs:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
       rc mb --ignore-existing supa-rustfs/${GLOBAL_S3_BUCKET}
       "
+    logging:
+      driver: k8s-file
+      options:
+        max-size: "10M"
+        # path: /home/zhang/data/logs/supabase/rustfs-createbucket.log
 
   storage:
     depends_on:
-      rustfs-createbucket:
-        condition: service_completed_successfully
       rustfs:
         condition: service_healthy
     environment:
       STORAGE_BACKEND: s3
       GLOBAL_S3_ENDPOINT: http://rustfs:9000
       GLOBAL_S3_PROTOCOL: http
-      GLOBAL_S3_FORCE_PATH_STYLE: true
+      GLOBAL_S3_FORCE_PATH_STYLE: "true"
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
 

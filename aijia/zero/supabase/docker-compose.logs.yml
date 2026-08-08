@@ -6,7 +6,6 @@
 #   docker compose -f docker-compose.yml -f docker-compose.logs.yml up -d
 
 services:
-
   studio:
     depends_on:
       analytics:
@@ -24,10 +23,7 @@ services:
     #  - 4000:4000
     healthcheck:
       test:
-        [
-          "CMD-SHELL",
-          "curl -sSfL -o /dev/null http://localhost:4000/health"
-        ]
+        ["CMD-SHELL", "curl -sSfL -o /dev/null http://localhost:4000/health"]
       timeout: 5s
       interval: 5s
       retries: 10
@@ -68,19 +64,25 @@ services:
     # service account key from Google Cloud Console)
     #volumes:
     #  - ./gcloud.json:/opt/app/rel/logflare/bin/gcloud.json:ro,z
+    logging:
+      driver: k8s-file
+      options:
+        max-size: "10M"
+        # path: /home/zhang/data/logs/supabase/analytics.log
 
   vector:
     container_name: supabase-vector
     image: timberio/vector:0.53.0-alpine
     restart: unless-stopped
     volumes:
-      - ./volumes/logs/vector.yml:/etc/vector/vector.yml:ro,z
-      - ${DOCKER_SOCKET_LOCATION}:/var/run/docker.sock:ro,z
+      - ./vector.yml:/etc/vector/vector.yml:ro,z
+      - /home/zhang/data/logs/supabase:/host-logs:ro,z
+      # - ${DOCKER_SOCKET_LOCATION}:/var/run/docker.sock:ro,z
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "wget --no-verbose --tries=1 --spider http://vector:9001/health"
+          "wget --no-verbose --tries=1 --spider http://vector:9001/health",
         ]
       timeout: 5s
       interval: 5s
@@ -90,10 +92,11 @@ services:
         condition: service_healthy
     environment:
       LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_PUBLIC_ACCESS_TOKEN}
-    command:
-      [
-        "--config",
-        "/etc/vector/vector.yml"
-      ]
+    command: ["--config", "/etc/vector/vector.yml"]
     security_opt:
       - "label=disable"
+    logging:
+      driver: k8s-file
+      options:
+        max-size: "10M"
+        # path: /home/zhang/data/logs/supabase/vector.log
