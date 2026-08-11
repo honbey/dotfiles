@@ -1,3 +1,7 @@
+networks:
+  local_containers:
+    external: true
+
 services:
   rustfs:
     container_name: supabase-rustfs
@@ -17,10 +21,21 @@ services:
       retries: 5
     volumes:
       - rustfs-data:/data
+    networks:
+      local_containers:
+        ipv4_address: 10.25.2.253
+    deploy:
+      resources:
+        limits:
+          cpus: 4
+          memory: 4G
+        reservations:
+          cpus: 0.5
+          memory: 512M
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
         # path: /home/zhang/data/logs/supabase/rustfs.log
 
   rustfs-createbucket:
@@ -34,10 +49,18 @@ services:
       rc alias set supa-rustfs http://rustfs:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
       rc mb --ignore-existing supa-rustfs/${GLOBAL_S3_BUCKET}
       "
+    networks:
+      local_containers:
+        ipv4_address: 10.25.2.254
+    deploy:
+      resources:
+        limits:
+          cpus: 0.1
+          memory: 512M
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
         # path: /home/zhang/data/logs/supabase/rustfs-createbucket.log
 
   storage:

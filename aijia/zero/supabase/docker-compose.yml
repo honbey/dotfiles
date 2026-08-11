@@ -10,11 +10,15 @@
 
 name: supabase
 
+networks:
+  local_containers:
+    external: true
+
 services:
   studio:
     container_name: supabase-studio
     #image: supabase/studio:2026.08.03-sha-022b374
-    image: quay.io/topthink/tests/supabase-studio:26.8.8-patch-ifnull
+    image: honbey/supabase:26.8.10-patch-tanstack-1b55c992
     restart: unless-stopped
     healthcheck:
       test:
@@ -22,7 +26,7 @@ services:
           "CMD-SHELL",
           'node -e "fetch(''http://localhost:3000/api/platform/profile'').then((r) => {if (r.status !== 200) throw new Error(r.status)})"',
         ]
-      timeout: 10s
+      timeout: 30s
       interval: 5s
       retries: 3
       start_period: 20s
@@ -47,6 +51,8 @@ services:
       DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION}
       DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_MODEL: ${LLM_MODEL}
 
       SUPABASE_URL: http://kong:8000
       SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
@@ -64,64 +70,22 @@ services:
     volumes:
       - ./volumes/snippets:/app/snippets:z
       - ./volumes/functions:/app/edge-functions:ro,z
-    logging:
-      driver: k8s-file
-      options:
-        max-size: "10M"
-        # path: /home/zhang/data/logs/supabase/studio.log
-
-  kong:
-    container_name: supabase-kong
-    image: kong/kong:3.9.3
-    restart: unless-stopped
     networks:
-      default:
-        aliases:
-          - api-gw
-    healthcheck:
-      test: ["CMD", "kong", "health"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    depends_on:
-      studio:
-        condition: service_healthy
-    ports:
-      - ${KONG_HTTP_PORT}:8000/tcp
-      - ${KONG_HTTPS_PORT}:8443/tcp
-    volumes:
-      - ./volumes/api/kong.yml:/home/kong/temp.yml:ro,z
-      - ./volumes/api/kong-entrypoint.sh:/home/kong/kong-entrypoint.sh:ro,z
-      #- ./volumes/api/server.crt:/home/kong/server.crt:ro
-      #- ./volumes/api/server.key:/home/kong/server.key:ro
-    environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /usr/local/kong/kong.yml
-      KONG_ROUTER_FLAVOR: expressions
-      # https://github.com/supabase/cli/issues/14
-      KONG_DNS_ORDER: LAST,A,CNAME
-      KONG_DNS_NOT_FOUND_TTL: 1
-      KONG_DNS_VALID_TTL: 5
-      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth,request-termination,ip-restriction,post-function
-      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
-      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
-      KONG_PROXY_ACCESS_LOG: /dev/stdout combined
-      #KONG_SSL_CERT: /home/kong/server.crt
-      #KONG_SSL_CERT_KEY: /home/kong/server.key
-      SUPABASE_ANON_KEY: ${ANON_KEY}
-      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
-      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
-      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
-      ANON_KEY_ASYMMETRIC: ${ANON_KEY_ASYMMETRIC:-}
-      SERVICE_ROLE_KEY_ASYMMETRIC: ${SERVICE_ROLE_KEY_ASYMMETRIC:-}
-      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME}
-      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
-    entrypoint: ["/bin/sh", "/home/kong/kong-entrypoint.sh"]
+      local_containers:
+        ipv4_address: 10.25.2.1
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 2G
+        reservations:
+          cpus: 0.5
+          memory: 512M
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
-        path: /home/zhang/data/logs/supabase/kong.log
+        max-size: 10M
+        # path: /home/zhang/data/logs/supabase/studio.log
 
   auth:
     container_name: supabase-auth
@@ -138,7 +102,7 @@ services:
           "http://localhost:9999/health",
         ]
       timeout: 5s
-      interval: 5s
+      interval: 30s
       retries: 3
     depends_on:
       db:
@@ -261,10 +225,18 @@ services:
       # GOTRUE_HOOK_SEND_EMAIL_ENABLED: "false"
       # GOTRUE_HOOK_SEND_EMAIL_URI: "http://host.docker.internal:54321/functions/v1/email_sender"
       # GOTRUE_HOOK_SEND_EMAIL_SECRETS: "v1,whsec_VGhpcyBpcyBhbiBleGFtcGxlIG9mIGEgc2hvcnRlciBCYXNlNjQgc3RyaW5n"
+    networks:
+      local_containers:
+        ipv4_address: 10.25.2.3
+    deploy:
+      resources:
+        limits:
+          cpus: 1
+          memory: 1G
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
         path: /home/zhang/data/logs/supabase/auth.log
 
   rest:
@@ -277,7 +249,7 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "postgrest", "--ready"]
-      interval: 5s
+      interval: 30s
       timeout: 5s
       retries: 3
     environment:
@@ -299,10 +271,18 @@ services:
       PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
       PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY}
     command: ["postgrest"]
+    networks:
+      local_containers:
+        ipv4_address: 10.25.2.4
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 1G
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
         path: /home/zhang/data/logs/supabase/rest.log
 
   realtime:
@@ -350,10 +330,21 @@ services:
       SEED_SELF_HOST: "true"
       RUN_JANITOR: "true"
       DISABLE_HEALTHCHECK_LOGGING: "true"
+    networks:
+      local_containers:
+        ipv4_address: 10.25.2.5
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 2G
+        reservations:
+          cpus: 0.25
+          memory: 256M
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
         path: /home/zhang/data/logs/supabase/realtime.log
 
   # To use S3 backed storage: docker compose -f docker-compose.yml -f docker-compose.s3.yml up
@@ -380,7 +371,7 @@ services:
           "http://storage:5000/status",
         ]
       timeout: 5s
-      interval: 5s
+      interval: 30s
       retries: 3
       start_period: 10s
     environment:
@@ -399,18 +390,19 @@ services:
       DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       STORAGE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
       REQUEST_ALLOW_X_FORWARDED_PATH: "true"
-      FILE_SIZE_LIMIT: 52428800
-      STORAGE_BACKEND: s3
+      FILE_SIZE_LIMIT: 52428800 # 50MB
+      #STORAGE_BACKEND: file
       # S3 bucket when using S3 backend, directory name when using 'file'
       GLOBAL_S3_BUCKET: ${GLOBAL_S3_BUCKET}
       # S3 Backend configuration
-      #GLOBAL_S3_ENDPOINT: https://your-s3-endpoint
-      #GLOBAL_S3_PROTOCOL: https
-      #GLOBAL_S3_FORCE_PATH_STYLE: "true"
-      #AWS_ACCESS_KEY_ID: your-access-key-id
-      #AWS_SECRET_ACCESS_KEY: your-secret-access-key
-      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
-      TENANT_ID: ${STORAGE_TENANT_ID}
+      STORAGE_BACKEND: s3
+      GLOBAL_S3_ENDPOINT: http://rustfs:9000
+      GLOBAL_S3_PROTOCOL: http
+      GLOBAL_S3_FORCE_PATH_STYLE: "true"
+      AWS_ACCESS_KEY_ID: ${S3_PROTOCOL_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${S3_PROTOCOL_ACCESS_KEY_SECRET}
+      #FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      #TENANT_ID: ${STORAGE_TENANT_ID}
       # TODO: https://github.com/supabase/storage-api/issues/55
       REGION: ${REGION}
       ENABLE_IMAGE_TRANSFORMATION: "true"
@@ -420,10 +412,21 @@ services:
       #S3_PROTOCOL_ACCESS_KEY_SECRET: ${S3_PROTOCOL_ACCESS_KEY_SECRET}
     volumes:
       - ./volumes/storage:/var/lib/storage:z
+    networks:
+      local_containers:
+        ipv4_address: 10.25.2.6
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 2G
+        reservations:
+          cpus: 0.25
+          memory: 256M
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
         path: /home/zhang/data/logs/supabase/storage.log
 
   imgproxy:
@@ -435,7 +438,7 @@ services:
     healthcheck:
       test: ["CMD", "imgproxy", "health"]
       timeout: 5s
-      interval: 5s
+      interval: 30s
       retries: 3
     environment:
       IMGPROXY_BIND: ":5001"
@@ -443,10 +446,18 @@ services:
       IMGPROXY_USE_ETAG: "true"
       IMGPROXY_AUTO_WEBP: ${IMGPROXY_AUTO_WEBP}
       IMGPROXY_MAX_SRC_RESOLUTION: 16.8
+    networks:
+      local_containers:
+        ipv4_address: 10.25.2.254
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 1G
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
         # path: /home/zhang/data/logs/supabase/imgproxy.log
 
   meta:
@@ -465,10 +476,21 @@ services:
       PG_META_DB_USER: postgres
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
       CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+    networks:
+      local_containers:
+        ipv4_address: 10.25.2.8
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 2G
+        reservations:
+          cpus: 0.25
+          memory: 256M
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
         # path: /home/zhang/data/logs/supabase/meta.log
 
   functions:
@@ -479,11 +501,12 @@ services:
       - ./volumes/functions:/home/deno/functions:z
       - deno-cache:/root/.cache/deno
     depends_on:
-      kong:
+      #kong:
+      api-gw:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/9000'"]
-      interval: 5s
+      interval: 30s
       timeout: 5s
       retries: 3
     environment:
@@ -505,10 +528,21 @@ services:
       # TODO: Allow configuring VERIFY_JWT per function.
       VERIFY_JWT: "${FUNCTIONS_VERIFY_JWT}"
     command: ["start", "--main-service", "/home/deno/functions/main"]
+    networks:
+      local_containers:
+        ipv4_address: 10.25.2.9
+    deploy:
+      resources:
+        limits:
+          cpus: 4
+          memory: 8G
+        reservations:
+          cpus: 0.25
+          memory: 256M
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
         path: /home/zhang/data/logs/supabase/functions.log
 
   # Comment out everything below this point if you are using an external Postgres database
@@ -537,7 +571,7 @@ services:
       - db-config:/etc/postgresql-custom
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
-      interval: 5s
+      interval: 30s
       timeout: 5s
       retries: 10
     environment:
@@ -557,10 +591,21 @@ services:
         "-c",
         "log_min_messages=fatal", # prevents Realtime polling queries from appearing in logs
       ]
+    networks:
+      local_containers:
+        ipv4_address: 10.25.2.10
+    deploy:
+      resources:
+        limits:
+          cpus: 4
+          memory: 8G
+        reservations:
+          cpus: 0.5
+          memory: 512M
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
         path: /home/zhang/data/logs/supabase/db.log
 
   # Update the DATABASE_URL if you are using an external Postgres database
@@ -616,10 +661,21 @@ services:
         "-c",
         '/app/bin/migrate && /app/bin/supavisor eval "$$(cat /etc/pooler/pooler.exs)" && /app/bin/server',
       ]
+    networks:
+      local_containers:
+        ipv4_address: 10.25.2.11
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 2G
+        reservations:
+          cpus: 0.5
+          memory: 512M
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
         # path: /home/zhang/data/logs/supabase/supavisor.log
 
 volumes:

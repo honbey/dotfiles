@@ -1,6 +1,10 @@
 # Envoy override for Kong
 # Usage: docker compose -f docker-compose.yml -f docker-compose.envoy.yml up
 
+networks:
+  local_containers:
+    external: true
+
 services:
   # Disable the original Kong service
   kong:
@@ -9,7 +13,7 @@ services:
 
   # Rewire dependencies that require Kong to Envoy
   functions:
-    depends_on: !override
+    depends_on:
       api-gw:
         condition: service_healthy
 
@@ -41,11 +45,26 @@ services:
     healthcheck:
       # Using a TCP port check because this image does not include curl or wget.
       test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/8000'"]
-      interval: 10s
+      interval: 30s
       timeout: 5s
       retries: 3
     networks:
-      default:
+      #default:
+      local_containers:
+        ipv4_address: 10.25.2.2
         aliases:
           - kong
           - envoy
+    deploy:
+      resources:
+        limits:
+          cpus: 4
+          memory: 4G
+        reservations:
+          cpus: 0.5
+          memory: 512M
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M
+        path: /home/zhang/data/logs/supabase/envoy.log
