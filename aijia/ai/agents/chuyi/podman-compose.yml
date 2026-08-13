@@ -21,7 +21,6 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       NANOBOT_LLM_TIMEOUT_S: ${NANOBOT_LLM_TIMEOUT_S:-300}
       NANOBOT_OPENAI_COMPAT_TIMEOUT_S: ${NANOBOT_OPENAI_COMPAT_TIMEOUT_S:-300}
-      HOME: ${HOME}
     volumes:
       - ./data:/nanobot:U,Z
     ports:

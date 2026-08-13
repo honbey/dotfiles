@@ -24,19 +24,19 @@ services:
     volumes:
       - ./data:/nanobot:U,Z
     ports:
-      - 0.0.0.0:1309:8765
+      - 127.0.0.1:1309:8765
     networks:
       local_containers:
         ipv4_address: 10.25.13.9
     deploy:
       resources:
         limits:
-          cpus: "1"
+          cpus: 1
           memory: 1G
         reservations:
-          cpus: "0.25"
+          cpus: 0.25
           memory: 256M
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
