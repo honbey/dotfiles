@@ -1,0 +1,109 @@
+# Nested variable interpolation (${A:-${B}}) requires podman-compose >= 1.6.0
+
+version: "3.9"
+
+networks:
+  local_containers:
+    external: true
+
+services:
+  convex-backend-1:
+    container_name: convex-backend-1
+    # Change this to :${REV} if you want to pin to a specific version
+    image: ghcr.io/get-convex/convex-backend:latest
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - 127.0.0.1:1230:3210
+      - 127.0.0.1:1231:3211
+    volumes:
+      - data:/convex/data
+    environment:
+      CONVEX_CLOUD_ORIGIN: ${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:${PORT:-3210}}
+      CONVEX_SITE_ORIGIN: ${CONVEX_SITE_ORIGIN:-http://127.0.0.1:${SITE_PROXY_PORT:-3211}}
+      #CONVEX_RELEASE_VERSION_DEV
+
+      HTTP_SERVER_TIMEOUT_SECONDS: ${HTTP_SERVER_TIMEOUT_SECONDS:-60}
+      V8_ACTION_USER_TIMEOUT_SECS: ${V8_ACTION_USER_TIMEOUT_SECS:-60}
+      NODE_ACTION_USER_TIMEOUT_SECS: ${NODE_ACTION_USER_TIMEOUT_SECS:-120}
+      APPLICATION_MAX_CONCURRENT_MUTATIONS: ${APPLICATION_MAX_CONCURRENT_MUTATIONS:-16}
+      APPLICATION_MAX_CONCURRENT_NODE_ACTIONS: ${APPLICATION_MAX_CONCURRENT_NODE_ACTIONS:-16}
+      APPLICATION_MAX_CONCURRENT_QUERIES: ${APPLICATION_MAX_CONCURRENT_QUERIES:-16}
+      APPLICATION_MAX_CONCURRENT_V8_ACTIONS: ${APPLICATION_MAX_CONCURRENT_V8_ACTIONS:-16}
+
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION}
+      #AWS_SESSION_TOKEN
+      #AWS_S3_DISABLE_CHECKSUMS: ${AWS_S3_DISABLE_CHECKSUMS}
+      AWS_S3_DISABLE_SSE: ${AWS_S3_DISABLE_SSE}
+      AWS_S3_FORCE_PATH_STYLE: ${AWS_S3_FORCE_PATH_STYLE}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_STORAGE_EXPORTS_BUCKET: ${S3_STORAGE_EXPORTS_BUCKET:-convex-snapshot-exports}
+      S3_STORAGE_SNAPSHOT_IMPORTS_BUCKET: ${S3_STORAGE_SNAPSHOT_IMPORTS_BUCKET:-convex-snapshot-imports}
+      S3_STORAGE_MODULES_BUCKET: ${S3_STORAGE_MODULES_BUCKET:-convex-modules}
+      S3_STORAGE_FILES_BUCKET: ${S3_STORAGE_FILES_BUCKET:-convex-user-files}
+      S3_STORAGE_SEARCH_BUCKET: ${S3_STORAGE_SEARCH_BUCKET:-convex-search-indexes}
+
+      #DATABASE_URL
+      #MYSQL_URL
+      POSTGRES_URL: ${POSTGRES_URL}
+      DO_NOT_REQUIRE_SSL: ${DO_NOT_REQUIRE_SSL}
+
+      DISABLE_BEACON: ${DISABLE_BEACON}
+      REDACT_LOGS_TO_CLIENT: ${REDACT_LOGS_TO_CLIENT:-true}
+      DISABLE_METRICS_ENDPOINT: ${DISABLE_METRICS_ENDPOINT:-true}
+      DOCUMENT_RETENTION_DELAY: ${DOCUMENT_RETENTION_DELAY:-172800}
+      INSTANCE_NAME: ${INSTANCE_NAME:-convex-self-hosted}
+      INSTANCE_SECRET: ${INSTANCE_SECRET}
+      RUST_BACKTRACE: ${RUST_BACKTRACE:-0}
+      RUST_LOG: ${RUST_LOG:-info}
+    healthcheck:
+      test: curl -f http://localhost:3210/version
+      interval: 30s
+      start_period: 10s
+    networks:
+      local_containers:
+        ipv4_address: 10.25.3.1
+    deploy:
+      resources:
+        limits:
+          cpus: 4
+          memory: 6G
+        reservations:
+          cpus: 0.25
+          memory: 256M
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M
+
+  convex-dashboard:
+    container_name: convex-dashboard
+    # Change this to :${REV} if you want to pin to a specific version
+    image: ghcr.io/get-convex/convex-dashboard:latest
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - 127.0.0.1:1229:6791
+    environment:
+      NEXT_PUBLIC_DEPLOYMENT_URL: ${NEXT_PUBLIC_DEPLOYMENT_URL:-http://127.0.0.1:${DASHBOARD_PORT:-6791}}
+      NEXT_PUBLIC_LOAD_MONACO_INTERNALLY: ${NEXT_PUBLIC_LOAD_MONACO_INTERNALLY}
+    networks:
+      local_containers:
+        ipv4_address: 10.25.3.254
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 2G
+        reservations:
+          cpus: 0.25
+          memory: 256M
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M
+
+volumes:
+  data:
