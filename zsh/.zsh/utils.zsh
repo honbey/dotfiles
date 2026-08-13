@@ -79,7 +79,16 @@ alias rm="echo Use 'del', or the full path i.e. '/bin/rm'."
 type fzf &>/dev/null && eval "$(fzf --zsh)"
 
 ### Zoxide
-type zoxide &>/dev/null && eval "$(zoxide init zsh | sed 's/function zi()/function zd()/')"
+if type zoxide &>/dev/null; then
+  # Patterns are separated by colons (zoxide 0.10 parses them with
+  # env::split_paths; space-separated values silently disable exclusion).
+  export _ZO_EXCLUDE_DIRS="\
+/tmp:/var:/proc:/sys:\
+${HOME}/.cache:${HOME}/.npm:${HOME}/.cargo:${HOME}/.rustup:\
+${HOME}/**/target:${HOME}/**/node_modules:${HOME}/**/dist:${HOME}/**/build\
+${HOME}/aijia:${HOME}/aijia/**/*:"
+  eval "$(zoxide init zsh | sed 's/function zi()/function zd()/')"
+fi
 
 ### Yazi
 # Provide the ability to change the current working directory when exiting Yazi.
