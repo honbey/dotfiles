@@ -1,5 +1,8 @@
 # Supabase (Self-hosting by Podman)
 
+暂时不用 Supabase，不太符合我的需求，多项目就要多个 Supabase，32G 内存也承受不住，
+而且我的项目规模都很小，有点小题大做的倾向，后面去试用下其免费的云服务就行了。
+
 .supabase-version:
 
 ```
