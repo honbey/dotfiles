@@ -42,13 +42,6 @@ services:
       options:
         max-size: 10M
 
-    healthcheck:
-      test: ["CMD", "curl", "-kf", "https://localhost:8443/health"]
-      interval: 60s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-
   kanidm-tools:
     container_name: kanidm-tools
     image: docker.io/kanidm/tools:1.12.0-dev
