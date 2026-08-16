@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Colors for output (matching the style of the root install.sh) RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+PID_DIR="."
+FORCE=false
+ACTION=""
+
+function info() { echo -e "${GREEN}[INFO]${NC}  $*"; }
+function warn() { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+function err() { echo -e "${RED}[ERROR]${NC} $*"; }
+function step() { echo -e "${CYAN}[STEP]${NC}  $*"; }
+
+function usage() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS] <program> [args...]
+
+Run a program in the background; write its PID to <pid-dir>/<program>.pid and
+append its output to a timestamped log <pid-dir>/<program>-<ts>.log.
+
+Options:
+  -d DIR, --pid-dir DIR  Directory for the PID file and logs (default: current dir)
+  -f, --force            Terminate a live old process first, then restart
+                         (default: refuse to start if the old process is alive)
+  -s ACTION, --signal ACTION
+                         stop: send SIGTERM to the running process and exit
+                         reload: send SIGHUP to the running process and exit
+  -h, --help             Show this help
+EOF
+}
+
+# Map long options to short ones before getopts. Use an array so that program
+# arguments containing spaces (e.g. `bash -c '...'`) survive unmodified.
+mapped_args=()
+for arg in "$@"; do
+  case "${arg}" in
+  --help) mapped_args+=(-h) ;;
+  --pid-dir=*) mapped_args+=(-d "${arg#*=}") ;;
+  --pid-dir) mapped_args+=(-d) ;;
+  --force) mapped_args+=(-f) ;;
+  --signal=*) mapped_args+=(-s "${arg#*=}") ;;
+  --signal) mapped_args+=(-s) ;;
+  *) mapped_args+=("${arg}") ;;
+  esac
+done
+set -- "${mapped_args[@]}"
+
+while getopts "d:fs:h" opt; do
+  case "${opt}" in
+  d) PID_DIR="${OPTARG}" ;;
+  f) FORCE=true ;;
+  s) ACTION="${OPTARG}" ;;
+  h)
+    usage
+    exit 0
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+if [[ -z "$*" ]]; then
+  err "no program given"
+  usage
+  exit 1
+fi
+
+PROGRAM_BASENAME="$(basename "$1")"
+PID_FILE="${PID_DIR}/${PROGRAM_BASENAME}.pid"
+
+# Check whether the recorded process is alive and really is our program
+# (guards against PID reuse killing an unrelated process).
+function is_running() {
+  local pid="$1"
+  [[ -n "${pid}" ]] || return 1
+  kill -0 "${pid}" 2>/dev/null || return 1
+  grep -q "${PROGRAM_BASENAME}" "/proc/${pid}/cmdline" 2>/dev/null
+}
+
+function send_signal() {
+  local signal="$1" pid
+  if [[ ! -f "${PID_FILE}" ]]; then
+    err "no pid file: ${PID_FILE}"
+    exit 1
+  fi
+  pid="$(<"${PID_FILE}")"
+  if ! is_running "${pid}"; then
+    err "process ${pid} is not running (or does not match ${PROGRAM_BASENAME})"
+    exit 1
+  fi
+  kill "-${signal}" "${pid}"
+  info "sent ${signal} to ${pid} (${PROGRAM_BASENAME})"
+}
+
+if [[ -n "${ACTION}" ]]; then
+  case "${ACTION}" in
+  stop) send_signal TERM ;;
+  reload) send_signal HUP ;;
+  *)
+    err "invalid --signal: ${ACTION} (expected stop or reload)"
+    exit 1
+    ;;
+  esac
+  exit 0
+fi
+
+if ! command -v "$1" >/dev/null 2>&1 && [[ ! -x "$1" ]]; then
+  err "${1} is not executable or not found on PATH"
+  exit 1
+fi
+
+# Refuse to start when the old process is still alive, unless forced.
+if [[ -f "${PID_FILE}" ]]; then
+  OLD_PID="$(<"${PID_FILE}")"
+  if is_running "${OLD_PID}"; then
+    if ${FORCE}; then
+      warn "terminating old process ${OLD_PID}"
+      kill -TERM "${OLD_PID}"
+      for _ in {1..10}; do
+        kill -0 "${OLD_PID}" 2>/dev/null || break
+        sleep 0.1
+      done
+      if kill -0 "${OLD_PID}" 2>/dev/null; then
+        warn "old process ${OLD_PID} still alive; sending SIGKILL"
+        kill -KILL "${OLD_PID}"
+      fi
+    else
+      err "process ${OLD_PID} is already running; use -f to force a restart"
+      exit 1
+    fi
+  else
+    warn "stale pid file detected; ignoring it"
+  fi
+fi
+
+mkdir -p "${PID_DIR}"
+LOG_FILE="${PID_DIR}/${PROGRAM_BASENAME}-$(date +%Y%m%d-%H%M%S).log"
+
+# Detach into a new session so the process survives shell exit, but keep
+# signals intact (nohup would ignore SIGHUP and break the reload action).
+setsid "$@" >>"${LOG_FILE}" 2>&1 &
+NEW_PID=$!
+echo "${NEW_PID}" >"${PID_FILE}"
+
+info "${PROGRAM_BASENAME} started with pid ${NEW_PID}"
+info "pid file: ${PID_FILE}"
+info "log file: ${LOG_FILE}"
