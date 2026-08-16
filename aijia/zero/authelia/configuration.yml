@@ -1,0 +1,141 @@
+server:
+  address: tcp://:9091/
+
+log:
+  level: info
+  format: json
+
+telemetry:
+  metrics:
+    enabled: false
+    address: tcp://:9092/metrics
+    buffers:
+      read: 4096
+      write: 4096
+    timeouts:
+      read: 6s
+      write: 6s
+      idle: 30s
+
+totp:
+  issuer: auth.example.com
+  algorithm: sha256
+  digits: 6
+  period: 30
+  skew: 1
+  secret_size: 32
+  allowed_algorithms:
+    - sha256
+  allowed_digits:
+    - 6
+  allowed_periods:
+    - 30
+  disable_reuse_security_policy: false
+
+webauthn:
+  disable: false
+  enable_passkey_login: true
+  display_name: Authelia
+
+identity_validation:
+  reset_password:
+    jwt_secret:
+
+authentication_backend:
+  # file:
+  #   path: /config/users.yml
+  ldap:
+    address: "ldaps://idm.example.com:3636"
+    #implementation: "rfc2307bis"
+    implementation: "custom"
+    timeout: "5s"
+    start_tls: false
+    pooling:
+      enable: false
+      count: 5
+      retries: 2
+      timeout: "10 seconds"
+    base_dn: "dc=idm,dc=freewisdom,dc=cn"
+    users_filter: "(&({username_attribute}={input})(class=person))"
+    groups_filter: "(&(name={input})(class=memberof))"
+    group_search_mode: "filter"
+    #groups_filter: "(|{memberof:rdn})"
+    #group_search_mode: "memberof"
+    permit_referrals: true
+    permit_unauthenticated_bind: false
+    user: "dn=token"
+    password:
+    attributes:
+      username: "name"
+      distinguished_name: "dn"
+      display_name: "displayname"
+      mail: "mail"
+      member_of: "memberof"
+      group_name: "spn"
+
+access_control:
+  default_policy: deny
+  networks:
+    - name: "internal"
+      networks:
+        - "10.0.0.0/8"
+        - "127.0.0.1/8"
+        - "169.254.1.0/24"
+    - name: "local"
+      networks:
+        - "192.168.1.0/24"
+        - "192.168.3.0/24"
+  rules:
+    - domain: auth.example.com
+      policy: bypass
+
+    - domain: dufs.example.com
+      policy: one_factor
+      # subject:
+      #   - "group:freewisdom_admins@idm.example.com"
+
+session:
+  name: authelia_session
+  secret:
+  same_site: "lax"
+  inactivity: "5m"
+  expiration: "1h"
+  remember_me: "7d"
+  cookies:
+    - domain: example.com
+      name: authelia_session
+      authelia_url: https://auth.example.com:9090
+      default_redirection_url: https://www.example.com
+      same_site: "lax"
+      inactivity: "5m"
+      expiration: "1h"
+      remember_me: "1d"
+  redis:
+    host: valkey
+    port: 6379
+
+regulation:
+  modes:
+    - user
+    - ip
+  max_retries: 3
+  find_time: 3m
+  ban_time: 30m
+
+storage:
+  encryption_key:
+  local:
+    path: /data/authelia.db
+
+notifier:
+  # filesystem:
+  #   filename: /config/notifications.yml
+  disable_startup_check: false
+  smtp:
+    address: submissions://smtp.qq.com:465
+    username: no-reply@example.com
+    password:
+    sender: "Authelia <no-reply@example.com>"
+    subject: "[Authelia] {title}"
+    startup_check_address: "admin@example.com"
+    timeout: 5s
