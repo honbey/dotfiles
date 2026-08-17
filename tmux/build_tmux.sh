@@ -8,7 +8,7 @@ YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-TMUX_VERSION="3.6b"
+TMUX_VERSION="3.5a"
 PREFIX="${HOME}/.local"
 
 function info() { echo -e "${GREEN}[INFO]${NC}  $*"; }
@@ -20,7 +20,7 @@ function usage() {
   cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Build and install tmux ${TMUX_VERSION} (default 3.6b: the latest tmux 3.7
+Build and install tmux ${TMUX_VERSION} (default 3.5a: the latest tmux 3.7
 makes the neovim cursor blink constantly) to ${PREFIX}/bin (or --prefix DIR).
 
 Options:
@@ -39,7 +39,7 @@ for arg in "$@"; do
     ;;
   --version=*) TMUX_VERSION="${arg#*=}" ;;
   --version)
-    err "--version requires a value (e.g. --version=3.6b)"
+    err "--version requires a value (e.g. --version=3.5a)"
     exit 1
     ;;
   -h | --help)
