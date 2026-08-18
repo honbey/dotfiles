@@ -11,6 +11,7 @@ services:
     restart: unless-stopped
     user: "1000:1000"
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       #KANIDM_DOMAIN: ${KANIDM_DOMAIN:-idm.example.com}
       #KANIDM_ORIGIN: ${KANIDM_ORIGIN:-https://${KANIDM_DOMAIN}}
       #KANIDM_BINDADDRESS: ${KANIDM_BINDADDRESS:-0.0.0.0:8443}
@@ -23,7 +24,8 @@ services:
       - ./data:/data:U,Z
       - ./certs:/certs:U,Z
     ports:
-      - 192.168.3.87:8443:8443
+      - 127.0.0.1:1097:8443
+      - 127.0.0.1:1098:3636
     networks:
       local_containers:
         ipv4_address: 10.25.1.10
@@ -42,8 +44,8 @@ services:
       options:
         max-size: 10M
 
-  kanidm-tools:
-    container_name: kanidm-tools
+  kanidm-mail:
+    container_name: kanidm-mail
     image: docker.io/kanidm/tools:1.12.0-dev
     restart: unless-stopped
     user: "1000:1000"
@@ -57,6 +59,8 @@ services:
       ]
     depends_on:
       - kanidm
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
     volumes:
       - ./config:/config:U,Z
     networks:
