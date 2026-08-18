@@ -1,0 +1,25 @@
+version: "3.9"
+
+networks:
+  local_containers:
+    external: true
+
+services:
+  anki-sync:
+    image: honbey/anki-sync:26.8.8-39e4b0b4
+    container_name: anki-sync
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      SYNC_USER1: ${SYNC_USER1:-user:Passw0rdStr_23}
+    volumes:
+      - ./data:/data:U,Z
+    ports:
+      - 0.0.0.0:1105:8080
+    networks:
+      local_containers:
+        ipv4_address: 10.25.11.5
+    logging:
+      driver: k8s-file
+      options:
+        max-size: "10M"
