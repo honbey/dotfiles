@@ -13,6 +13,11 @@ ref=self-hosted/v0.7.2
 主要是将日志 driver 改成 `k8s-file`，并将其持久化到宿主机的日志目录方便 `vector` 采集，
 `vector.yml` 适应 Podman 的 ctr 日志进行适配改动从而可以正确解析日志。
 
+## .env.example 以及 CONFIG.md
+
+这两个文件包含一些示例的敏感信息，会被 CNB 误报，我已将其从历史提交中删除，
+需要的话从 [Supabase](https://github.com/supabase/supabase) 仓库中再拉取。
+
 ## supabase-analytics auth_logs 返回 500
 
 原因是 [Supabase PR#46851](https://github.com/supabase/supabase/pull/46851) 中使用了本地 PostgreSQL 不支持的 `IFNULL`，
