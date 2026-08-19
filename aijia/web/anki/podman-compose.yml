@@ -6,8 +6,8 @@ networks:
 
 services:
   anki-sync:
-    image: honbey/anki-sync:26.8.8-39e4b0b4
     container_name: anki-sync
+    image: honbey/anki-sync:26.8.8-39e4b0b4
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Asia/Shanghai}
@@ -19,7 +19,15 @@ services:
     networks:
       local_containers:
         ipv4_address: 10.25.11.5
+    deploy:
+      resources:
+        limits:
+          cpus: 1
+          memory: 256M
+        reservations:
+          cpus: 0.1
+          memory: 16M
     logging:
       driver: k8s-file
       options:
-        max-size: "10M"
+        max-size: 10M
