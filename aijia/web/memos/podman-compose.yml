@@ -1,0 +1,35 @@
+version: "3.9"
+
+networks:
+  local_containers:
+    external: true
+
+services:
+  memos:
+    container_name: memos
+    image: neosmemo/memos:stable
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      MEMOS_INSTANCE_URL: ${MEMOS_INSTANCE_URL}
+    env_file:
+      - .env
+    volumes:
+      - ./data:/var/opt/memos:U,Z
+    ports:
+      - 0.0.0.0:1106:5230
+    networks:
+      local_containers:
+        ipv4_address: 10.25.11.6
+    deploy:
+      resources:
+        limits:
+          cpus: 1
+          memory: 1G
+        reservations:
+          cpus: 0.1
+          memory: 64M
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M
