@@ -10,6 +10,10 @@
 
 数据库服务。
 
+## Operating System (os)
+
+操作系统的配置。
+
 ## Web (web)
 
 以 Web 服务为主的应用。
