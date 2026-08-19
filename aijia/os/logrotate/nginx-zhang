@@ -1,0 +1,18 @@
+# /etc/logrotate.d/nginx-zhang
+/home/zhang/app/web/nginx/logs/json_access.log
+/home/zhang/app/web/nginx/logs/error.log
+{
+  su zhang zhang
+  daily
+  rotate 185
+  missingok
+  notifempty
+  dateext
+  compress
+  olddir /home/zhang/app/web/nginx/logs
+  postrotate
+    if [ -f /home/zhang/app/web/nginx/logs/pid ]; then
+      kill -USR1 $(cat /home/zhang/app/web/nginx/logs/pid)
+    fi
+  endscript
+}
