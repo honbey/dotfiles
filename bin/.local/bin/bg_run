@@ -112,9 +112,28 @@ function send_signal() {
   info "sent ${signal} to ${pid} (${PROGRAM_BASENAME})"
 }
 
+# After stop: wait for the process to exit (signals are asynchronous) and only
+# then drop the pid file, so a quick start cannot spawn a second instance.
+# Keep the file on timeout; the stale-pid path handles it on the next run.
+function wait_exit_and_clean() {
+  local pid="$1"
+  for _ in {1..20}; do
+    kill -0 "${pid}" 2>/dev/null || break
+    sleep 0.1
+  done
+  if kill -0 "${pid}" 2>/dev/null; then
+    warn "process ${pid} has not exited yet; keeping ${PID_FILE}"
+  else
+    rm -f "${PID_FILE}"
+  fi
+}
+
 if [[ -n "${ACTION}" ]]; then
   case "${ACTION}" in
-  stop) send_signal TERM ;;
+  stop)
+    send_signal TERM
+    wait_exit_and_clean "$(read_pid)"
+    ;;
   reload) send_signal HUP ;;
   *)
     err "invalid --signal: ${ACTION} (expected stop or reload)"
