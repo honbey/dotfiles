@@ -1,0 +1,167 @@
+version: "3.9"
+
+networks:
+  local_containers:
+    external: true
+
+services:
+  vector:
+    container_name: vector
+    image: timberio/vector:0.58.X-debian
+    restart: unless-stopped
+    command: ["--config-dir", "/etc/vector"]
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./vector-conf:/etc/vector:U,Z
+      - ./vector:/var/lib/vector:U,Z
+      - /etc/machine-id:/etc/machine-id:ro,Z
+      - /var/log/journal:/var/log/journal:ro,Z
+      - ${HOME}/app/nginx/logs:/logs/nginx:U,Z
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks:
+      local_containers:
+        ipv4_address: 10.25.12.16
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 1G
+        reservations:
+          cpus: 0.1
+          memory: 16M
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M
+
+  victoria-metrics:
+    container_name: victoria-metrics
+    image: victoriametrics/victoria-metrics:v1.150.0
+    restart: unless-stopped
+    command: ["-storageDataPath=/var/lib/victoria", "-retentionPeriod=181d"]
+    networks:
+      local_containers:
+        ipv4_address: 10.25.12.17
+    ports:
+      - 127.0.0.1:1217:8428
+    volumes:
+      - ./victoria-metrics:/var/lib/victoria:U,Z
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 1G
+        reservations:
+          cpus: 0.1
+          memory: 16M
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M
+
+  victoria-logs:
+    container_name: victoria-logs
+    image: victoriametrics/victoria-logs:v1.52.0
+    restart: unless-stopped
+    command: ["-storageDataPath=/var/lib/victoria", "-retentionPeriod=31d"]
+    volumes:
+      - ./victoria-logs:/var/lib/victoria:U,Z
+    networks:
+      local_containers:
+        ipv4_address: 10.25.12.18
+    ports:
+      - 127.0.0.1:1218:9428
+    deploy:
+      resources:
+        limits:
+          cpus: 4
+          memory: 4G
+        reservations:
+          cpus: 0.1
+          memory: 16M
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M
+
+  loki:
+    container_name: loki
+    image: grafana/loki:3.7.6
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yml", "-target=all"]
+    user: "0:0"
+    #environment:
+    volumes:
+      - ./loki.yml:/etc/loki/config.yml:U,Z
+      #- ./loki-overrides.yml:/etc/loki/overrides.yml:U,Z
+      - ./loki:/var/lib/loki:U,Z
+    networks:
+      local_containers:
+        ipv4_address: 10.25.12.19
+    ports:
+      - 127.0.0.1:1219:3100
+    deploy:
+      resources:
+        limits:
+          cpus: 4
+          memory: 4G
+        reservations:
+          cpus: 0.1
+          memory: 16M
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M
+
+    healthcheck:
+      test: ["CMD", "/usr/bin/loki", "-health"]
+      start_period: 5s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:13.2-slim
+    restart: unless-stopped
+    user: "0:0"
+    environment:
+      GF_PATHS_PROVISIONING: ${GF_PATHS_PROVISIONING:-/etc/grafana/provisioning}
+      GF_AUTH_ANONYMOUS_ENABLED: ${GF_AUTH_ANONYMOUS_ENABLED:-true}
+      GF_AUTH_ANONYMOUS_ORG_ROLE: ${GF_AUTH_ANONYMOUS_ORG_ROLE:-Admin}
+    depends_on:
+      loki:
+        condition: service_healthy
+    volumes:
+      - ./grafana-ds.yml:/etc/grafana/provisioning/datasources/ds.yml:U,Z
+      - ./grafana:/var/lib/grafana:U,Z
+    networks:
+      local_containers:
+        ipv4_address: 10.25.12.20
+    ports:
+      - 127.0.0.1:1220:3000
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 2G
+        reservations:
+          cpus: 0.25
+          memory: 256M
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
