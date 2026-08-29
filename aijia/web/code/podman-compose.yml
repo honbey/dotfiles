@@ -8,7 +8,7 @@ services:
   code-server:
     container_name: code-server
     #image: codercom/code-server:latest
-    image: honbey/playground:26.8.11-code-server
+    image: honbey/playground:26.8.28-code-server
     restart: unless-stopped
     command:
       [
