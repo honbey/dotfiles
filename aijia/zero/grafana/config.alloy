@@ -1,0 +1,70 @@
+logging {
+    level  = "info"
+    format = "logfmt"
+}
+
+//local.file "nginx_access" {
+//    filename = "/logs/nginx/json_access.log"
+//}
+
+loki.source.file "nginx_access" {
+    targets    = [{
+        __path__         = "/logs/nginx/json_access.log",
+        "job"            = "nginx/access",
+        "instance"       = "omen-15ce0xx",
+    }]
+    tail_from_end = true
+    forward_to = [loki.process.nginx_access.receiver]
+}
+
+loki.process "nginx_access" {
+    stage.json {
+        expressions = {
+            msec        = "msec",
+            server_name = "server_name",
+            method      = "request_method",
+            status      = "status",
+        }
+    }
+
+    stage.timestamp {
+        source = "msec"
+        format = "Unix"
+    }
+
+    stage.labels {
+        values = {
+            server_name = "server_name",
+            status      = "status",
+            method      = "method",
+        }
+    }
+
+    stage.label_drop {
+        values = ["filename"]
+    }
+
+    stage.output {
+        source = "message"
+    }
+
+    forward_to = [loki.write.loki_test.receiver]
+}
+
+loki.write "loki_prod" {
+    endpoint {
+        url = "http://loki:3100/loki/api/v1/push"
+        headers = {
+            "X-Scope-OrgID" = "prod",
+        }
+    }
+}
+
+loki.write "loki_test" {
+    endpoint {
+        url = "http://loki:3100/loki/api/v1/push"
+        headers = {
+            "X-Scope-OrgID" = "test",
+        }
+    }
+}

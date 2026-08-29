@@ -1,0 +1,80 @@
+version: "3.9"
+
+networks:
+  local_containers:
+    external: true
+
+services:
+  kanidm:
+    container_name: kanidm
+    image: docker.io/kanidm/server:1.12.0-dev
+    restart: unless-stopped
+    user: "1000:1000"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      #KANIDM_DOMAIN: ${KANIDM_DOMAIN:-idm.example.com}
+      #KANIDM_ORIGIN: ${KANIDM_ORIGIN:-https://${KANIDM_DOMAIN}}
+      #KANIDM_BINDADDRESS: ${KANIDM_BINDADDRESS:-0.0.0.0:8443}
+      #KANIDM_TLS_CHAIN: ${KANIDM_TLS_CHAIN:-/certs/fullchain.pem}
+      #KANIDM_TLS_KEY: ${KANIDM_TLS_KEY:-/certs/privkey.pem}
+      #KANIDM_DB_PATH: ${KANIDM_DB_PATH:-/data/kanidm.db}
+      KANIDM_LOG_LEVEL: ${KANIDM_LOG_LEVEL:-info}
+    volumes:
+      - ./config/server.toml:/data/server.toml:U,Z
+      - ./data:/data:U,Z
+      - ./certs:/certs:U,Z
+    ports:
+      - 127.0.0.1:1097:8443
+      - 127.0.0.1:1098:3636
+    networks:
+      local_containers:
+        ipv4_address: 10.25.1.10
+        aliases:
+          - ${KANIDM_DOMAIN}
+    deploy:
+      resources:
+        limits:
+          cpus: 1
+          memory: 512M
+        reservations:
+          cpus: 0.25
+          memory: 128M
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M
+
+  kanidm-mail:
+    container_name: kanidm-mail
+    image: docker.io/kanidm/tools:1.12.0-dev
+    restart: unless-stopped
+    user: "1000:1000"
+    command:
+      [
+        "kanidm-mail-sender",
+        "-c",
+        "/config/kanidm.toml",
+        "-m",
+        "/config/mail-sender.toml",
+      ]
+    depends_on:
+      - kanidm
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./config:/config:U,Z
+    networks:
+      local_containers:
+        ipv4_address: 10.25.1.11
+    deploy:
+      resources:
+        limits:
+          cpus: 0.5
+          memory: 256M
+        reservations:
+          cpus: 0.1
+          memory: 64M
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M

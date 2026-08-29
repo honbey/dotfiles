@@ -1,0 +1,203 @@
+server:
+  address: tcp://:9091/
+
+log:
+  level: info
+  format: json
+
+telemetry:
+  metrics:
+    enabled: false
+    address: tcp://:9092/metrics
+    buffers:
+      read: 4096
+      write: 4096
+    timeouts:
+      read: 6s
+      write: 6s
+      idle: 30s
+
+totp:
+  issuer: auth.freewisdom.cn
+  algorithm: sha256
+  digits: 6
+  period: 30
+  skew: 1
+  secret_size: 32
+  allowed_algorithms:
+    - sha256
+  allowed_digits:
+    - 6
+  allowed_periods:
+    - 30
+  disable_reuse_security_policy: false
+
+webauthn:
+  disable: false
+  enable_passkey_login: true
+  display_name: Authelia
+
+identity_validation:
+  reset_password:
+    jwt_secret:
+
+authentication_backend:
+  refresh_interval: "1d"
+  password_reset:
+    disable: false
+    #custom_url: ""
+  password_change:
+    disable: false
+  file:
+    path: /config/users.yml
+    watch: false
+    search:
+      email: false
+      case_insensitive: false
+    password:
+      algorithm: "argon2"
+      argon2:
+        variant: "argon2id"
+        iterations: 3
+        memory: 65536
+        parallelism: 4
+        key_length: 32
+        salt_length: 16
+
+access_control:
+  default_policy: deny
+  networks:
+    - name: "internal"
+      networks:
+        - "127.0.0.1/8"
+        - "169.254.1.0/24"
+    - name: "local"
+      networks:
+        - "10.0.0.0/8"
+        - "192.168.1.0/24"
+        - "192.168.3.0/24"
+  rules:
+    - domain:
+        - freewisdom.cn
+        - auth.freewisdom.cn
+      policy: bypass
+
+    - domain: code.freewisdom.cn
+      policy: bypass
+      resources:
+        - '^\/manifest\.json$'
+        - '^\/_static\/src\/browser\/media\/pwa-icon-(maskable-)?(192|512)\.png$'
+        - '^\/_static\/src\/browser\/media\/favicon(\.ico|dark-support\.svg)$'
+    - domain: code.freewisdom.cn
+      policy: two_factor
+      subject:
+        - "group:users"
+
+    - domain: dufs.freewisdom.cn
+      policy: bypass
+      resources:
+        - '/^\/__dufs_v\d{1}.\d{1,3}.\d{1}__\/favicon\.ico$/gm'
+    - domain: dufs.freewisdom.cn
+      policy: two_factor
+      subject:
+        - "group:users"
+
+    - domain: s.freewisdom.cn
+      policy: bypass
+      resources:
+        - '^\/manifest\.json$'
+        - '^\/static\/themes\/simple\/img\/(favicon\.svg|192\.png|512\.png)$'
+        - '^\/static\/themes\/simple\/img\/favicon\.png$'
+    - domain: s.freewisdom.cn
+      policy: two_factor
+      subject:
+        - "group:users"
+
+session:
+  name: authelia_session
+  secret:
+  same_site: "lax"
+  inactivity: "5m"
+  expiration: "1h"
+  remember_me: "7d"
+  cookies:
+    - name: authelia_session
+      domain: freewisdom.cn
+      authelia_url: https://auth.freewisdom.cn:9090
+      default_redirection_url: https://www.freewisdom.cn
+      remember_me: "1d"
+  redis:
+    host: valkey
+    port: 6379
+
+regulation:
+  modes:
+    #- user
+    - ip
+  max_retries: 5
+  find_time: 3m
+  ban_time: 60m
+
+storage:
+  encryption_key:
+  local:
+    path: /data/authelia.db
+
+notifier:
+  # filesystem:
+  #   filename: /config/notifications.yml
+  disable_startup_check: false
+  smtp:
+    address: submissions://smtp.qq.com:465
+    username: no-reply@qq.com
+    password:
+    sender: "Authelia <no-reply@qq.com>"
+    subject: "[Authelia] {title}"
+    startup_check_address: "admin@qq.com"
+    timeout: 5s
+
+identity_providers:
+  oidc:
+    hmac_secret:
+    jwks:
+      - key_id: "default"
+        algorithm: "RS256"
+        use: "sig"
+        key: |
+          -----BEGIN PRIVATE KEY-----
+          -----END PRIVATE KEY-----
+        certificate_chain: |
+          -----BEGIN CERTIFICATE-----
+          -----END CERTIFICATE-----
+    cors:
+      endpoints:
+        - "authorization"
+        - "pushed-authorization-request"
+        - "token"
+        - "revocation"
+        - "introspection"
+        - "userinfo"
+      allowed_origins:
+        - "https://auth.freewisdom.cn:9090"
+        - "https://memos.freewisdom.cn"
+      allowed_origins_from_client_redirect_uris: true
+    clients:
+      - client_id: "memos"
+        client_name: "Memos"
+        client_secret: "$pbkdf2-sha512$..."
+        authorization_policy: "two_factor"
+        public: false
+        redirect_uris:
+          - "https://memos.freewisdom.cn/auth/callback"
+        scopes:
+          - "openid"
+          - "profile"
+          - "email"
+        #claims_policy: ""
+        require_pkce: false
+        pkce_challenge_method: ""
+        grant_types:
+          - "authorization_code"
+        access_token_signed_response_alg: "none"
+        userinfo_signed_response_alg: "none"
+        token_endpoint_auth_method: "client_secret_post"

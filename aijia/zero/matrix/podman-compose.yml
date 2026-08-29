@@ -1,0 +1,36 @@
+version: "3.9"
+
+networks:
+  local_containers:
+    external: true
+
+services:
+  tuwunel:
+    container_name: tuwunel
+    image: jevolk/tuwunel:main
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      TUWUNEL_CONFIG: ${TUWUNEL_CONFIG:-/etc/tuwunel.toml}
+      TUWUNEL_ALLOW_REGISTRATION: ${TUWUNEL_ALLOW_REGISTRATION:-false}
+      TUWUNEL_REGISTRATION_TOKEN: ${TUWUNEL_REGISTRATION_TOKEN}
+    volumes:
+      - ./db:/var/lib/tuwunel:U,Z
+      - ./config/tuwunel.toml:/etc/tuwunel.toml:U,Z
+    ports:
+      - 127.0.0.1:1107:8008
+    networks:
+      local_containers:
+        ipv4_address: 10.25.11.7
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 2G
+        reservations:
+          cpus: 0.25
+          memory: 256M
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M

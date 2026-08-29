@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: searxng-pod
+  labels:
+    app: searxng
+  annotations:
+    cni.podman.io/ip-address: "10.25.11.9"
+spec:
+  restartPolicy: Always
+
+  containers:
+    - name: searxng
+      image: docker.io/searxng/searxng:2026.7.22-ef8f6470e
+      ports:
+        - containerPort: 8888
+          hostPort: 1109
+          hostIP: 0.0.0.0
+      envFrom:
+        - configMapRef:
+            name: searxng-env
+      volumeMounts:
+        - name: searxng-config
+          mountPath: /etc/searxng/
+        - name: searxng-cache
+          mountPath: /var/cache/searxng/
+      resources:
+        limits:
+          cpu: "2"
+          memory: "2Gi"
+        requests:
+          cpu: "250m"
+          memory: "256Mi"
+
+    - name: mcp-searxng
+      image: localhost/mcp-searxng:26.6.15
+      ports:
+        - containerPort: 3000
+          hostPort: 1180
+          hostIP: 0.0.0.0
+      envFrom:
+        - configMapRef:
+            name: searxng-env
+      resources:
+        limits:
+          cpu: "1"
+          memory: "1Gi"
+        requests:
+          cpu: "250m"
+          memory: "256Mi"
+
+  volumes:
+    - name: searxng-config
+      hostPath:
+        path: ./config/
+        type: Directory
+    - name: searxng-cache
+      hostPath:
+        path: ./cache/
+        type: DirectoryOrCreate

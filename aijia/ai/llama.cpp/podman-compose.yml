@@ -1,0 +1,66 @@
+version: "3.9"
+
+networks:
+  local_containers:
+    external: true
+
+services:
+  llama-cpp:
+    container_name: llama-cpp
+    image: llama.cpp:full-cuda12.4
+    restart: unless-stopped
+    entrypoint: /app/llama-server
+    command:
+      [
+        "-m",
+        "/models/qwenpaw-flash-2b-q4_k_m.gguf",
+        "--port",
+        "8080",
+        "--host",
+        "0.0.0.0",
+        "-t",
+        "2",
+        "--batch-size",
+        "1024",
+        "--ubatch-size",
+        "512",
+        "-ngl",
+        "33",
+        "--override-tensor",
+        'blk\.\d+\.ffn_(?:up|down)_exps\.=CPU',
+        "--flash-attn",
+        "0",
+        "--ctx-size",
+        "16384",
+        "--temp",
+        "0.7",
+        "--top-p",
+        "0.8",
+        "--top-k",
+        "20",
+        "--min-p",
+        "0.00",
+        "--chat-template-kwargs",
+        '"{\"enable_thinking\": false}"',
+      ]
+    # nothink: "--reasoning-budget", "0"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./models:/models
+    ports:
+      - 127.0.0.1:1130:8080
+    networks:
+      local_containers:
+        ipv4_address: 10.25.10.30
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    logging:
+      driver: k8s-file
+      options:
+        max-size: 10M
