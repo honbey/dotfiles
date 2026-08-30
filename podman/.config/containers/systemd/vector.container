@@ -1,0 +1,51 @@
+[Unit]
+Description=vector container service
+
+After=loki.service victoria-logs.service victoria-metrics.service
+Requires=loki.service victoria-logs.service victoria-metrics.service
+
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+Image=docker.io/timberio/vector:0.58.X-debian
+
+ContainerName=vector
+
+Exec=--config-dir /etc/vector --watch-config
+
+StopTimeout=10
+
+EnvironmentFile=%h/.config/containers/systemd/vector.env
+
+Volume=/etc/machine-id:/etc/machine-id:ro,Z
+
+Volume=./vector.conf.d:/etc/vector:Z
+Volume=vector_data.volume:/var/lib/vector:Z
+
+Volume=/var/log/journal:/var/log/journal:ro,Z
+Volume=%h/app/nginx/logs:/logs/nginx:Z
+
+PublishPort=127.0.0.1:1210:9001
+
+Network=10_26_0_1.network:ip=10.26.12.10
+
+PodmanArgs=--cpus=2
+PodmanArgs=--memory=1g
+PodmanArgs=--memory-reservation=16m
+
+LogDriver=journald
+
+#HealthCmd=wget --no-verbose --tries=1 --spider http://127.0.0.1:9001/health
+HealthCmd=vector --version
+#HealthStartPeriod=10s
+HealthInterval=600s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

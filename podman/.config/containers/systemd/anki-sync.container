@@ -1,0 +1,40 @@
+[Unit]
+Description=Anki Sync container service
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+Image=quay.io/honbey/anki-sync:26.8.8-39e4b0b4
+
+ContainerName=anki-sync
+
+StopSignal=SIGINT
+StopTimeout=10
+
+EnvironmentFile=%h/.config/containers/systemd/anki-sync.env
+
+Volume=anki-sync_data.volume:/data:Z
+
+PublishPort=127.0.0.1:1030:8080
+
+Network=10_26_0_1.network:ip=10.26.10.30
+
+# Memory=256M
+PodmanArgs=--cpus=1
+PodmanArgs=--memory=256m
+PodmanArgs=--memory-reservation=16m
+
+LogDriver=journald
+
+HealthCmd=wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/health
+HealthInterval=60s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

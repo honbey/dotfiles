@@ -1,0 +1,59 @@
+[Unit]
+Description=Code Server container service
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+# Image=docker.io/codercom/code-server:latest
+Image=quay.io/honbey/playground:26.8.28-code-server
+
+ContainerName=code-server
+
+Exec=--auth=none \
+     --disable-update-check \
+     --disable-telemetry \
+     --link-protection-trusted-domains=*.freewisdom.cn \
+     --proxy-domain=code-{{port}}.freewisdom.cn:33
+
+#StopSignal=SIGINT
+StopTimeout=10
+
+EnvironmentFile=%h/.config/containers/systemd/code-server.env
+
+Tmpfs=/tmp:rw,size=1g,mode=1777
+Volume=code-server_data.volume:/root:Z
+Volume=%h/dotfiles:/root/dotfiles:z
+Volume=%h/workspace:/root/workspace:z
+Volume=%h/resources:/root/resources:z
+Volume=%h/.cargo:/root/.cargo:z
+Volume=%h/.rustup:/root/.rustup:z
+Volume=%h/.go:/root/.go:z
+Volume=%h/.local/share/nvim/mason/packages:/root/.local/share/nvim/mason/packages:z
+Volume=%h/.npm:/root/.npm:z
+Volume=%h/.cache:/root/.cache:z
+Volume=/home/linuxbrew:/home/linuxbrew:z
+
+PublishPort=127.0.0.1:1040:8080
+
+Network=10_26_0_1.network:ip=10.26.10.40
+
+# Memory=12G
+PodmanArgs=--cpus=6
+PodmanArgs=--memory=12g
+PodmanArgs=--memory-reservation=128m
+
+LogDriver=journald
+
+HealthCmd=curl -fsS http://localhost:8080/healthz
+HealthStartPeriod=10s
+HealthInterval=60s
+HealthTimeout=10s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

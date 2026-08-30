@@ -1,0 +1,41 @@
+[Unit]
+Description=Clash (Proxy) container service
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+Image=quay.io/honbey/playground:clash-1.18
+
+ContainerName=clash
+
+Exec=-d /root/.config/clash -l /root/clash
+
+#StopSignal=SIGINT
+StopTimeout=10
+
+EnvironmentFile=%h/.config/containers/systemd/clash.env
+
+Volume=./clash.conf.d:/root/.config/clash:Z
+
+PublishPort=127.0.0.1:1080:1080
+
+Network=10_26_0_1.network:ip=10.26.10.80
+
+PodmanArgs=--cpus=0.5
+PodmanArgs=--memory=256m
+PodmanArgs=--memory-reservation=16m
+
+LogDriver=journald
+
+HealthCmd=curl -fsS http://127.0.0.1:1081/version
+HealthInterval=60s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

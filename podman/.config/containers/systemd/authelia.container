@@ -1,0 +1,47 @@
+[Unit]
+Description=Authelia container service
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+# Image=docker.io/authelia/authelia:latest
+Image=docker.io/authelia/authelia:master
+
+ContainerName=authelia
+
+StopTimeout=10
+
+EnvironmentFile=%h/.config/containers/systemd/authelia.env
+
+Volume=./authelia.conf.d:/config:Z
+Volume=authelia_data.volume:/data:Z
+
+Secret=authelia-jwt-secret,target=/secrets/JWT_SECRET,mode=0400
+Secret=authelia-session-secret,target=/secrets/SESSION_SECRET,mode=0400
+Secret=authelia-storage-key,target=/secrets/STORAGE_ENCRYPTION_KEY,mode=0400
+Secret=authelia-smtp-password,target=/secrets/SMTP_PASSWORD,mode=0400
+Secret=authelia-oidc-hmac,target=/secrets/HMAC_SECRET,mode=0400
+
+PublishPort=127.0.0.1:1060:9091
+
+Network=10_26_0_1.network:ip=10.26.10.60
+
+PodmanArgs=--cpus=2
+PodmanArgs=--memory=2g
+PodmanArgs=--memory-reservation=32m
+
+LogDriver=journald
+
+HealthCmd=wget --no-verbose --tries=1 --spider http://localhost:9091/api/health
+HealthStartPeriod=10s
+HealthInterval=60s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,42 @@
+[Unit]
+Description=VictoriaMetrics (Metrics) container service
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+Image=docker.io/victoriametrics/victoria-metrics:v1.150.0
+
+ContainerName=victoria-metrics
+
+Exec=-storageDataPath=/var/lib/victoria -retentionPeriod=365d
+
+StopTimeout=10
+
+EnvironmentFile=%h/.config/containers/systemd/victoria-metrics.env
+
+#User=0:0
+Volume=victoria-metrics_data.volume:/var/lib/victoria:Z
+
+PublishPort=127.0.0.1:1170:8428
+
+Network=10_26_0_1.network:ip=10.26.11.70
+
+PodmanArgs=--cpus=2
+PodmanArgs=--memory=2g
+PodmanArgs=--memory-reservation=32m
+
+LogDriver=journald
+
+HealthCmd=wget --no-verbose --tries=1 --spider http://127.0.0.1:8428/health
+HealthStartPeriod=10s
+HealthInterval=60s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

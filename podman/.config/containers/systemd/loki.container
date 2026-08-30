@@ -1,0 +1,43 @@
+[Unit]
+Description=Loki (Logs) container service
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+Image=docker.io/grafana/loki:3.7.7
+
+ContainerName=loki
+
+Exec=-config.file=/etc/loki/config.yml -target=all
+
+StopTimeout=10
+
+EnvironmentFile=%h/.config/containers/systemd/loki.env
+
+User=0:0
+Volume=./loki.conf.d:/etc/loki:Z
+Volume=loki_data.volume:/var/lib/loki:Z
+
+PublishPort=127.0.0.1:1190:3100
+
+Network=10_26_0_1.network:ip=10.26.11.90
+
+PodmanArgs=--cpus=4
+PodmanArgs=--memory=4g
+PodmanArgs=--memory-reservation=64m
+
+LogDriver=journald
+
+HealthCmd=["/usr/bin/loki", "-health"]
+HealthStartPeriod=30s
+HealthInterval=60s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

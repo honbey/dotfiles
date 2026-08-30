@@ -1,0 +1,45 @@
+[Unit]
+Description=NanoBot (Xiao T) container service
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+Image=quay.io/honbey/nanobot:26.8.8-bd8d3ad5
+
+ContainerName=nanobot-t
+
+Exec=gateway \
+     --config /config/config.json
+
+#StopSignal=SIGINT
+StopTimeout=10
+
+EnvironmentFile=%h/.config/containers/systemd/nanobot-t.env
+
+Volume=./nanobot-t.conf.d:/config:Z
+Volume=nanobot-t_data.volume:/nanobot/workspace:Z
+
+PublishPort=127.0.0.1:1160:8765
+#PublishPort=127.0.0.1:1161:18790
+
+Network=10_26_0_1.network:ip=10.26.11.60
+
+PodmanArgs=--cpus=1
+PodmanArgs=--memory=1g
+PodmanArgs=--memory-reservation=64m
+
+LogDriver=journald
+
+HealthCmd=curl -fsL http://127.0.0.1:18790/health
+HealthStartPeriod=10s
+HealthInterval=60s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

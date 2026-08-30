@@ -1,0 +1,42 @@
+[Unit]
+Description=Valkey (Redis) container service
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+Image=docker.io/valkey/valkey:9-alpine
+
+ContainerName=valkey
+
+Exec=valkey-server --save 30 1 --loglevel warning
+
+#StopSignal=SIGINT
+StopTimeout=10
+
+EnvironmentFile=%h/.config/containers/systemd/valkey.env
+
+User=999:1000
+Volume=valkey_data.volume:/data:U,Z
+
+PublishPort=127.0.0.1:1050:6379
+
+Network=10_26_0_1.network:ip=10.26.10.50
+
+PodmanArgs=--cpus=2
+PodmanArgs=--memory=2g
+PodmanArgs=--memory-reservation=256m
+
+LogDriver=journald
+
+HealthCmd=valkey-cli ping
+HealthInterval=60s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

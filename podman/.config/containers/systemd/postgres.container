@@ -1,0 +1,42 @@
+[Unit]
+Description=PostgreSQL container service
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+Image= docker.io/library/postgres:18-alpine
+
+ContainerName=postgres
+
+#StopSignal=SIGINT
+StopTimeout=10
+
+EnvironmentFile=%h/.config/containers/systemd/postgres.env
+
+User=70:70
+Volume=postgres_data.volume:/var/lib/postgresql:U,Z
+# Postgres 17
+#Volume=postgres_data.volume:/var/lib/postgresql/data:U,Z
+
+PublishPort=127.0.0.1:1150:5432
+
+Network=10_26_0_1.network:ip=10.26.11.50
+
+PodmanArgs=--cpus=2
+PodmanArgs=--memory=2g
+PodmanArgs=--memory-reservation=256m
+
+LogDriver=journald
+
+HealthCmd=pg_isready -U root -d data
+HealthInterval=60s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

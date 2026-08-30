@@ -1,0 +1,42 @@
+[Unit]
+Description=Dufs (WebDAV) container service
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+Image=docker.io/sigoden/dufs:latest
+
+ContainerName=dufs
+
+#StopSignal=SIGTERM
+StopTimeout=10
+
+#Exec=/data -A -a ${ADMIN}@/:rw -a ${SYNC1}@/sync:rw -a ${USER1}@/tmp:rw -a @/public
+Exec=/data -A -a @/:rw
+
+EnvironmentFile=%h/.config/containers/systemd/dufs.env
+
+Volume=dufs_data.volume:/data:Z
+
+PublishPort=127.0.0.1:1070:5000
+
+Network=10_26_0_1.network:ip=10.26.10.70
+
+PodmanArgs=--cpus=1
+PodmanArgs=--memory=1g
+PodmanArgs=--memory-reservation=16m
+
+LogDriver=journald
+
+#HealthCmd=wget --no-verbose --tries=1 --spider http://localhost:5000/
+#HealthInterval=60s
+#HealthTimeout=5s
+#HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target
