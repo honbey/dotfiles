@@ -7,3 +7,4 @@
 !.local/bin/backup_home
 !.local/bin/bg_run
 !.local/bin/new_container
+!.local/bin/install_brew

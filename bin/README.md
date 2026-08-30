@@ -19,6 +19,44 @@
 - `-n, --dry-run`：仅列出不删除
 - `-h, --help`：查看帮助
 
+## install_brew
+
+安装 Homebrew（缺失时）及脚本内定义的软件包列表。包列表原先放在仓库根目录的 `brew/` 下，
+现已合并进本脚本，`brew/Dockerfile` 不再需要（Linuxbrew 镜像由其他仓库维护）。
+
+安装前会做两层判断，命中任一即跳过，避免与系统自带的版本冲突：
+
+1. 已由 Homebrew 安装
+2. 对应命令已存在于 Homebrew prefix 之外（由系统包管理器或 cargo/npm 等工具链提供）
+
+因此同一台机器上重复执行是安全的。
+
+分组规则：
+
+| 分组 | 安装条件 |
+| --- | --- |
+| common | 总是安装 |
+| macos | 仅 macOS |
+| optional | 需 `-a/--all` |
+| casks | macOS GUI 应用，需 `-c/--casks` 且为 macOS（其他系统会警告跳过） |
+
+条目格式为 `formula[:bin1,bin2]`，`bin` 默认为 formula 名；部分包在不同发行版下的命令名不同
+（如 Debian 的 `fd` 为 `fdfind`、`ripgrep` 为 `rg`），需显式列出备用名。
+
+- `-a, --all`：同时安装 optional 分组
+- `-c, --casks`：安装 macOS casks（仅 macOS）
+- `-n, --dry-run`：仅打印不安装
+- `-v, --verbose`：输出被跳过（已存在）的包
+- `-h, --help`：查看帮助
+
+```bash
+install_brew            # Homebrew + common
+install_brew -a         # 含 optional
+install_brew -a -c      # 全部（含 macOS 应用）
+```
+
+`install.sh --first-run` 现在只负责安装 Homebrew，装包通过调用本脚本完成。
+
 ## new_container
 
 快速生成 Podman Quadlet 容器配置（`<name>.container`、`*.env`），省去从现有单元文件复制改写的麻烦。

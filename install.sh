@@ -36,7 +36,7 @@ Usage: $(basename "$0") [OPTIONS] [STOW_PACKAGE...]
 Bootstrap a machine with dotfiles and optional system provisioning.
 
 Options:
-  --first-run, -F    Install Homebrew (Tsinghua mirror) and essential packages
+  --first-run, -F    Install Homebrew (Tsinghua mirror) and packages via install_brew
   -d DIR, --dir DIR  Dotfiles directory (default: \${HOME}/dotfiles)
   -n, --dry-run      Dry run: pass -n to stow; also skip system changes
   -v, --verbose      Verbose: pass -v to stow; also print more details
@@ -161,34 +161,18 @@ function first_run() {
     exit 1
   fi
 
-  step "Installing essential packages with Homebrew..."
-  local common_packages=(git curl jq stow zsh)
-  local mac_packages=(gnu-sed coreutils)
-
-  for pkg in "${common_packages[@]}"; do
-    if brew list --formula "${pkg}" &>/dev/null; then
-      ${VERBOSE} && info "Package ${pkg} already installed, skipping."
-    else
-      if ${DRY_RUN}; then
-        echo "[dry-run] brew install ${pkg}"
-      else
-        brew install "${pkg}"
-      fi
-    fi
-  done
-
-  if [[ ${os} == "macos" ]]; then
-    for pkg in "${mac_packages[@]}"; do
-      if brew list --formula "${pkg}" &>/dev/null; then
-        ${VERBOSE} && info "Package ${pkg} already installed, skipping."
-      else
-        if ${DRY_RUN}; then
-          echo "[dry-run] brew install ${pkg}"
-        else
-          brew install "${pkg}"
-        fi
-      fi
-    done
+  # Package installation is delegated to install_brew, which owns the package
+  # list and skips anything already provided by the OS or by Homebrew.
+  local brew_script="${DOTFILES_DIR}/bin/.local/bin/install_brew"
+  if [[ -x "${brew_script}" ]]; then
+    step "Installing packages with install_brew..."
+    local brew_args=()
+    ${DRY_RUN} && brew_args+=("-n")
+    ${VERBOSE} && brew_args+=("-v")
+    "${brew_script}" "${brew_args[@]}"
+  else
+    warn "install_brew not found at ${brew_script}; skipping package installation"
+    warn "run it manually after bootstrap: install_brew"
   fi
 
   info "First‑run provisioning completed."

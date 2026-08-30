@@ -1,0 +1,323 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Install Homebrew and the package list defined in this script.
+#
+# Before installing anything, each package is checked twice:
+#   1. installed by Homebrew itself   -> skip
+#   2. binary available outside the Homebrew prefix -> skip, it is already
+#      provided by the OS package manager or another toolchain
+#
+# Categories:
+#   common    always installed
+#   macos     installed only on macOS
+#   optional  installed only with -a/--all
+#   casks     macOS GUI apps, installed only with -c/--casks on macOS
+
+# Colors for output (matching the style of the root install.sh)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+function info() { echo -e "${GREEN}[INFO]${NC}  $*"; }
+function warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+function err() { echo -e "${RED}[ERROR]${NC} $*"; }
+function step() { echo -e "${CYAN}[STEP]${NC}  $*"; }
+
+function usage() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Install Homebrew (if missing) and the package list defined in this script.
+
+Packages already installed by Homebrew are skipped, as are packages whose
+binary already exists outside the Homebrew prefix (installed by the OS package
+manager or another toolchain).
+
+Options:
+  -a, --all      Also install the optional formulae
+  -c, --casks    Also install macOS casks (macOS only; skipped elsewhere)
+  -n, --dry-run  Print what would be done without installing
+  -v, --verbose  Report packages that were skipped as already present
+  -h, --help     Show this help
+
+Examples:
+  $(basename "$0")                # Homebrew + common formulae
+  $(basename "$0") -a             # include optional formulae
+  $(basename "$0") -a -c          # everything, including macOS apps
+  $(basename "$0") -n             # preview only
+EOF
+}
+
+# Package lists. Each entry is "formula[:bin1,bin2]" where bin defaults to the
+# formula name; probe several names when a distro ships a different one.
+# An entry ending in ":" has no binary to probe and is always offered to brew.
+
+FORMULAE_COMMON=(
+  bat
+  btop
+  dust
+  fd:fd,fdfind
+  fzf
+  git-crypt
+  gnupg:gpg
+  jq
+  neovim:nvim
+  pinentry
+  ripgrep:rg
+  rm-improved:rip
+  starship
+  stow
+  tmux
+  yazi
+  zoxide
+)
+
+FORMULAE_MACOS=(
+  coreutils:gstat
+  gnu-sed:gsed
+  iproute2mac:
+  mtr:mtr
+)
+
+FORMULAE_OPTIONAL=(
+  certbot
+  cmake
+  curl
+  make
+  node@24:node
+  sevenzip:7zz
+  uv
+  zsh
+)
+
+CASKS=(
+  anki
+  brave-browser
+  endless-sky-high-dpi
+  ghostty
+  iina
+  maccy
+  multitouch
+  netnewswire
+  obs
+  skim
+  squirrel
+  shotcut
+  wireshark
+)
+
+# Default settings
+ALL=false
+INSTALL_CASKS=false
+DRY_RUN=false
+VERBOSE=false
+OS=""
+HOMEBREW_PREFIX=""
+
+function detect_os() {
+  case "$(uname -s)" in
+  Darwin) echo "macos" ;;
+  Linux) echo "linux" ;;
+  *)
+    err "unsupported OS: $(uname -s)"
+    exit 1
+    ;;
+  esac
+}
+
+# Make an already installed Homebrew usable in this shell, so that the script
+# also works right after the installer ran (it does not touch this shell).
+function load_brew_env() {
+  local candidate
+  if command -v brew >/dev/null 2>&1; then
+    HOMEBREW_PREFIX="$(brew --prefix)"
+    return 0
+  fi
+  for candidate in /home/linuxbrew/.linuxbrew/bin/brew /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [[ -x "${candidate}" ]]; then
+      eval "$("${candidate}" shellenv)"
+      HOMEBREW_PREFIX="$(brew --prefix)"
+      return 0
+    fi
+  done
+  return 1
+}
+
+function install_homebrew() {
+  if command -v brew >/dev/null 2>&1; then
+    info "Homebrew is already installed: $(brew --prefix)"
+    return
+  fi
+
+  step "Installing Homebrew via Tsinghua mirror (${OS})..."
+  if ${DRY_RUN}; then
+    info "[dry-run] Would clone and run the Homebrew installer"
+    return
+  fi
+
+  git clone --depth=1 https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/install.git /tmp/brew-install
+  bash /tmp/brew-install/install.sh
+  rm -rf /tmp/brew-install
+
+  if ! load_brew_env; then
+    err "brew not found after installation; check your PATH"
+    exit 1
+  fi
+  info "Homebrew installed: ${HOMEBREW_PREFIX}"
+}
+
+# Print the binary names to probe for a "formula[:bin1,bin2]" entry.
+function bins_for() {
+  local entry="$1"
+  if [[ "${entry}" == *:* ]]; then
+    printf '%s' "${entry#*:}" | tr ',' ' '
+  else
+    printf '%s' "${entry%%:*}"
+  fi
+}
+
+function install_formula() {
+  local entry="$1" formula="${1%%:*}" bins bin path
+  bins="$(bins_for "${entry}")"
+
+  if brew list --formula "${formula}" >/dev/null 2>&1; then
+    ${VERBOSE} && info "already installed by brew: ${formula}"
+    # Return 0 explicitly: `${VERBOSE} && info` is false when not verbose, and a
+    # bare `return` would pass that failure on, aborting the caller under set -e.
+    return 0
+  fi
+
+  # A binary outside the Homebrew prefix means the OS or another toolchain
+  # already provides this tool; installing it again would shadow that copy.
+  for bin in ${bins}; do
+    path="$(command -v "${bin}" 2>/dev/null || true)"
+    [[ -n "${path}" ]] || continue
+    if [[ -n "${HOMEBREW_PREFIX}" && "${path}" == "${HOMEBREW_PREFIX}"/* ]]; then
+      continue
+    fi
+    warn "skip ${formula}: ${bin} already provided by ${path}"
+    return 0
+  done
+
+  if ${DRY_RUN}; then
+    echo "[dry-run] brew install ${formula}"
+    return
+  fi
+  step "Installing ${formula}"
+  brew install "${formula}"
+}
+
+function install_cask() {
+  local cask="$1"
+
+  if brew list --cask "${cask}" >/dev/null 2>&1; then
+    ${VERBOSE} && info "cask already installed: ${cask}"
+    # Return 0 explicitly; see the note in install_formula.
+    return 0
+  fi
+
+  if ${DRY_RUN}; then
+    echo "[dry-run] brew install --cask ${cask}"
+    return
+  fi
+  step "Installing cask ${cask}"
+  brew install --cask "${cask}"
+}
+
+# Map long options to short ones before getopts.
+# An array keeps values containing spaces intact; `set -- $(...)` would
+# word-split them.
+args=()
+for arg in "$@"; do
+  case "${arg}" in
+  --help) args+=(-h) ;;
+  --all) args+=(-a) ;;
+  --casks) args+=(-c) ;;
+  --dry-run) args+=(-n) ;;
+  --verbose) args+=(-v) ;;
+  *) args+=("${arg}") ;;
+  esac
+done
+# Guard the empty case: on bash < 4.4 a bare "${args[@]}" under `set -u` errors.
+if [[ ${#args[@]} -gt 0 ]]; then
+  set -- "${args[@]}"
+else
+  set --
+fi
+
+while getopts "acnvh" opt; do
+  case "${opt}" in
+  h)
+    usage
+    exit 0
+    ;;
+  a) ALL=true ;;
+  c) INSTALL_CASKS=true ;;
+  n) DRY_RUN=true ;;
+  v) VERBOSE=true ;;
+  *)
+    usage
+    exit 1
+    ;;
+  esac
+done
+
+function main() {
+  local entry cask
+
+  OS="$(detect_os)"
+  step "Detected OS: ${OS}"
+
+  install_homebrew
+
+  if ! command -v brew >/dev/null 2>&1; then
+    if ${DRY_RUN}; then
+      warn "[dry-run] brew unavailable; cannot check or install packages"
+      return
+    fi
+    err "brew is not available; aborting"
+    exit 1
+  fi
+  [[ -n "${HOMEBREW_PREFIX}" ]] || HOMEBREW_PREFIX="$(brew --prefix)"
+
+  step "Installing formulae (common)"
+  for entry in "${FORMULAE_COMMON[@]}"; do
+    install_formula "${entry}"
+  done
+
+  if [[ "${OS}" == "macos" ]]; then
+    step "Installing formulae (macos)"
+    for entry in "${FORMULAE_MACOS[@]}"; do
+      install_formula "${entry}"
+    done
+  fi
+
+  if ${ALL}; then
+    step "Installing formulae (optional)"
+    for entry in "${FORMULAE_OPTIONAL[@]}"; do
+      install_formula "${entry}"
+    done
+  fi
+
+  if ${INSTALL_CASKS}; then
+    if [[ "${OS}" == "macos" ]]; then
+      step "Installing casks"
+      for cask in "${CASKS[@]}"; do
+        install_cask "${cask}"
+      done
+    else
+      warn "--casks is macOS only; skipping"
+    fi
+  fi
+
+  if ${DRY_RUN}; then
+    info "This was a dry run. No changes were made."
+  else
+    info "Done."
+  fi
+}
+
+main "$@"
