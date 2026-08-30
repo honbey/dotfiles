@@ -54,19 +54,26 @@ EOF
 }
 
 # Map long options to short ones before getopts.
-# Use printf instead of echo: a bare "-n" would be swallowed by echo.
-set -- $(
-  for arg in "$@"; do
-    case "${arg}" in
-    --first-run) printf '%s\n' "-F" ;;
-    --dir) printf '%s\n' "-d" ;;
-    --dry-run) printf '%s\n' "-n" ;;
-    --verbose) printf '%s\n' "-v" ;;
-    --help) printf '%s\n' "-h" ;;
-    *) printf '%s\n' "${arg}" ;;
-    esac
-  done
-)
+# An array keeps values containing spaces intact; `set -- $(...)` would
+# word-split them, e.g. --dir="/path with space" would break.
+args=()
+for arg in "$@"; do
+  case "${arg}" in
+  --first-run) args+=(-F) ;;
+  --dry-run) args+=(-n) ;;
+  --verbose) args+=(-v) ;;
+  --help) args+=(-h) ;;
+  --dir=*) args+=(-d "${arg#*=}") ;;
+  --dir) args+=(-d) ;;
+  *) args+=("${arg}") ;;
+  esac
+done
+# Guard the empty case: on bash < 4.4 a bare "${args[@]}" under `set -u` errors.
+if [[ ${#args[@]} -gt 0 ]]; then
+  set -- "${args[@]}"
+else
+  set --
+fi
 
 while getopts "Fd:nvh" opt; do
   case "${opt}" in
@@ -85,6 +92,16 @@ while getopts "Fd:nvh" opt; do
   esac
 done
 shift $((OPTIND - 1))
+
+# Expand a leading ~ so that --dir=~/dotfiles works (the shell only expands an
+# unquoted ~ outside of an assignment-style argument).
+DOTFILES_DIR="${DOTFILES_DIR/#\~/$HOME}"
+
+# Packages given on the command line take precedence over the default list,
+# as documented in the usage text.
+if [[ $# -gt 0 ]]; then
+  PACKAGES=("$@")
+fi
 
 # Dependency checks
 if ! command -v stow &>/dev/null && [[ ${FIRST_RUN} == false ]]; then
@@ -201,10 +218,16 @@ function link_dotfiles() {
   ${DRY_RUN} && stow_args+=("-n")
   ${VERBOSE} && stow_args+=("--verbose=2")
 
-  stow_args+=(-t "${HOME}" ${PACKAGES[@]})
+  stow_args+=(-t "${HOME}" "${PACKAGES[@]}")
 
-  stow "-D" "${stow_args[@]}"
-  stow "${stow_args[@]}"
+  # stow resolves package names against the current directory, so run it from
+  # the dotfiles directory regardless of where this script was invoked from.
+  # A subshell keeps the caller's working directory untouched.
+  (
+    cd "${DOTFILES_DIR}"
+    stow "-D" "${stow_args[@]}"
+    stow "${stow_args[@]}"
+  )
 }
 
 # Main
@@ -213,6 +236,11 @@ function main() {
   info "Dotfiles directory: ${DOTFILES_DIR}"
   ${FIRST_RUN} && info "First-run mode:     enabled"
   ${DRY_RUN} && info "Dry-run mode:       enabled"
+
+  if [[ ! -d "${DOTFILES_DIR}" ]]; then
+    err "dotfiles directory not found: ${DOTFILES_DIR}"
+    exit 1
+  fi
 
   if ${FIRST_RUN}; then
     first_run

@@ -326,16 +326,10 @@ function emit() {
 function main() {
   step "Generating Quadlet files for ${NAME}"
 
-  if [[ ! -d "${OUT_DIR}" ]]; then
-    if ${DRY_RUN}; then
-      warn "[dry-run] directory does not exist: ${OUT_DIR}"
-    else
-      err "directory not found: ${OUT_DIR}"
-      exit 1
-    fi
-  fi
-
-  if ! ${DRY_RUN}; then
+  # Create the output directory unless this is a dry run.
+  if ${DRY_RUN}; then
+    [[ -d "${OUT_DIR}" ]] || warn "[dry-run] directory does not exist: ${OUT_DIR}"
+  else
     mkdir -p "${OUT_DIR}"
   fi
 
