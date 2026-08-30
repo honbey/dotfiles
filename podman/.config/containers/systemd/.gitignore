@@ -1,0 +1,9 @@
+*
+*.env
+*.env.*
+.env
+!.gitignore
+!*.env.example
+*.conf.d/*
+!*.conf.d
+!*.conf.d/.gitkeep
