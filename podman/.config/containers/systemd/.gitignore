@@ -4,6 +4,8 @@
 .env
 !.gitignore
 !*.env.example
+!*.conf.example
+!README.md
 *.conf.d/*
 !*.conf.d
 !*.conf.d/.gitkeep
