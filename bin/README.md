@@ -19,6 +19,51 @@
 - `-n, --dry-run`：仅列出不删除
 - `-h, --help`：查看帮助
 
+## new_container
+
+快速生成 Podman Quadlet 容器配置（`<name>.container`、`*.env`），省去从现有单元文件复制改写的麻烦。
+
+模板取本仓库 20 个单元文件中**最常使用的配置项**，其余可选项以注释形式输出，按需取消注释即可：
+
+- 直接生成：`Description`、`After`、`StartLimit*`、`Image`、`ContainerName`、`EnvironmentFile`、
+  `PublishPort`、`Network`、`PodmanArgs`、`LogDriver`、`StopTimeout`、`Health*`、
+  `Restart`、`RestartSec`、`WantedBy`
+- 注释形式：`Exec`、`StopSignal`、`User`、`HealthStartPeriod`、`Secret`、`Tmpfs`、`Volume`
+
+`*.env` 默认只写入 `TZ=Asia/Shanghai`。
+
+`_data.volume` 与 `.conf.d/` **默认不生成**，对应的 `Volume=` 行以注释输出；需生成时传 `-V` / `-C`，
+此时 Volume 行会自动启用并创建文件（`.conf.d/` 带 `.gitkeep`）。
+
+网络 IP 沿用仓库约定：`-p` 指定的 4 位宿主端口 `ABCD` 映射为 `10.26.AB.CD`，
+例如 `-p 1040` 得到 `ip=10.26.10.40`；未指定 `-p` 时 `PublishPort` / `Network` 以注释加占位符输出。
+
+选项需写在 NAME 之前（与 `install.sh` 一致）。
+
+- `-i IMAGE, --image IMAGE`：容器镜像（默认 `docker.io/library/NAME:latest`）
+- `-D DESC, --description DESC`：Unit 描述（默认 `NAME container service`）
+- `-p PORT, --port PORT`：宿主端口，4 位数字，同时用于推导网络 IP
+- `-P PORT, --container-port PORT`：容器端口（默认 8080）
+- `-I IP, --ip IP`：手动指定 IP，覆盖 `-p` 推导结果
+- `-c N, --cpus N`：CPU 限制（默认 1）
+- `-m SIZE, --memory SIZE`：内存上限（默认 256m）
+- `-r SIZE, --memory-reservation SIZE`：内存软限制（默认 16m）
+- `-u USER, --user USER`：容器用户 `uid:gid`
+- `-V, --volume`：生成 `<name>_data.volume` 并启用对应 Volume 行
+- `-C, --conf-d`：生成 `<name>.conf.d/` 并启用对应 Volume 行
+- `-d DIR, --dir DIR`：输出目录（默认 `~/.config/containers/systemd`，支持 `~` 展开）
+- `-f, --force`：覆盖已存在文件
+- `-n, --dry-run`：仅打印不写入
+- `-v, --verbose`：写入时同时打印内容
+- `-h, --help`：查看帮助
+
+```bash
+new_container -i docker.io/neosmemo/memos:stable -p 1090 -P 5230 -V memos
+new_container -p 1200 -P 3000 -c 4 -m 4g -V -C grafana
+```
+
+生成后需执行 `systemctl --user daemon-reload` 才能启动。
+
 ## backup_home
 
 我已经把数据从 /opt/data 完全迁移到了 `$HOME`，顺便弄个备份脚本。

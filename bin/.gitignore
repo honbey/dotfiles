@@ -6,3 +6,4 @@
 !.local/bin/rm_dangling_links
 !.local/bin/backup_home
 !.local/bin/bg_run
+!.local/bin/new_container

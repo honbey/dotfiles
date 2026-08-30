@@ -1,0 +1,366 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Generate Quadlet unit files for a new container service.
+#
+# Template items are the ones used by (nearly) every unit in the repo:
+#   Description, After, StartLimit*, Image, ContainerName, EnvironmentFile,
+#   PublishPort, Network, PodmanArgs, LogDriver, StopTimeout, Health*,
+#   Restart, RestartSec, WantedBy
+# Optional items are emitted as comments so they can be enabled on demand:
+#   Exec, StopSignal, User, HealthStartPeriod, Secret, Tmpfs, Volume
+
+# Colors for output (matching the style of the root install.sh)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+function info() { echo -e "${GREEN}[INFO]${NC}  $*"; }
+function warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+function err() { echo -e "${RED}[ERROR]${NC} $*"; }
+function step() { echo -e "${CYAN}[STEP]${NC}  $*"; }
+
+# Default settings
+OUT_DIR="${HOME}/.config/containers/systemd"
+NETWORK="10_26_0_1.network"
+CONTAINER_PORT=8080
+CPUS=1
+MEMORY=256m
+MEMORY_RESERVATION=16m
+TIMEZONE="Asia/Shanghai"
+IMAGE=""
+DESCRIPTION=""
+HOST_PORT=""
+NETWORK_IP=""
+CONTAINER_USER=""
+DRY_RUN=false
+VERBOSE=false
+FORCE=false
+GEN_VOLUME=false
+GEN_CONF_D=false
+
+function usage() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS] NAME
+
+Generate Quadlet files for a new container service:
+  <name>.container, <name>.env, and optionally <name>_data.volume / <name>.conf.d/
+
+Files are created in the output directory (default ~/.config/containers/systemd),
+which is normally stow-linked into the dotfiles repository.
+
+Volumes and conf.d directories are NOT generated unless requested (-V / -C);
+their Volume= lines are written as comments either way, ready to be enabled.
+
+Options:
+  -i IMAGE, --image IMAGE       Container image (default: docker.io/library/NAME:latest)
+  -D DESC, --description DESC   Unit Description (default: "NAME container service")
+  -p PORT, --port PORT          Host port, 4 digits; also derives the network IP
+  -P PORT, --container-port PORT  Container port (default: 8080)
+  -I IP, --ip IP                Override the IP derived from --port
+  -c N, --cpus N                CPU limit (default: 1)
+  -m SIZE, --memory SIZE        Memory limit (default: 256m)
+  -r SIZE, --memory-reservation SIZE  Soft memory limit (default: 16m)
+  -u USER, --user USER          Container user as uid:gid
+  -V, --volume                  Generate <name>_data.volume and enable its Volume= line
+  -C, --conf-d                  Generate <name>.conf.d/ and enable its Volume= line
+  -d DIR, --dir DIR             Output directory (default: ~/.config/containers/systemd)
+  -f, --force                   Overwrite existing files
+  -n, --dry-run                 Print to stdout without writing anything
+  -v, --verbose                 Also print generated content when writing
+  -h, --help                    Show this help
+
+The network IP follows the repo convention: a 4-digit host port ABCD maps to
+10.26.AB.CD, so --port 1040 yields ip=10.26.10.40.
+
+Examples:
+  $(basename "$0") -i docker.io/neosmemo/memos:stable -p 1090 -P 5230 memos
+  $(basename "$0") -p 1200 -P 3000 -c 4 -m 4g -V -C grafana
+  $(basename "$0") -n demo                     # preview only
+
+As with install.sh, options come before NAME.
+EOF
+}
+
+# Map long options to short ones before getopts.
+# An array is used so that values containing spaces (e.g. --description)
+# survive intact; a plain `set -- $(...)` would word-split them.
+args=()
+for arg in "$@"; do
+  case "${arg}" in
+  --help) args+=("-h") ;;
+  --dry-run) args+=("-n") ;;
+  --verbose) args+=("-v") ;;
+  --force) args+=("-f") ;;
+  --volume) args+=("-V") ;;
+  --conf-d) args+=("-C") ;;
+  --image=*) args+=("-i" "${arg#*=}") ;;
+  --image) args+=("-i") ;;
+  --description=*) args+=("-D" "${arg#*=}") ;;
+  --description) args+=("-D") ;;
+  --port=*) args+=("-p" "${arg#*=}") ;;
+  --port) args+=("-p") ;;
+  --container-port=*) args+=("-P" "${arg#*=}") ;;
+  --container-port) args+=("-P") ;;
+  --ip=*) args+=("-I" "${arg#*=}") ;;
+  --ip) args+=("-I") ;;
+  --cpus=*) args+=("-c" "${arg#*=}") ;;
+  --cpus) args+=("-c") ;;
+  --memory=*) args+=("-m" "${arg#*=}") ;;
+  --memory) args+=("-m") ;;
+  --memory-reservation=*) args+=("-r" "${arg#*=}") ;;
+  --memory-reservation) args+=("-r") ;;
+  --user=*) args+=("-u" "${arg#*=}") ;;
+  --user) args+=("-u") ;;
+  --dir=*) args+=("-d" "${arg#*=}") ;;
+  --dir) args+=("-d") ;;
+  *) args+=("${arg}") ;;
+  esac
+done
+if [[ ${#args[@]} -gt 0 ]]; then
+  set -- "${args[@]}"
+else
+  set --
+fi
+
+while getopts "hi:D:p:P:I:c:m:r:u:d:VCfnv" opt; do
+  case "${opt}" in
+  h)
+    usage
+    exit 0
+    ;;
+  i) IMAGE="${OPTARG}" ;;
+  D) DESCRIPTION="${OPTARG}" ;;
+  p) HOST_PORT="${OPTARG}" ;;
+  P) CONTAINER_PORT="${OPTARG}" ;;
+  I) NETWORK_IP="${OPTARG}" ;;
+  c) CPUS="${OPTARG}" ;;
+  m) MEMORY="${OPTARG}" ;;
+  r) MEMORY_RESERVATION="${OPTARG}" ;;
+  u) CONTAINER_USER="${OPTARG}" ;;
+  d) OUT_DIR="${OPTARG}" ;;
+  V) GEN_VOLUME=true ;;
+  C) GEN_CONF_D=true ;;
+  f) FORCE=true ;;
+  n) DRY_RUN=true ;;
+  v) VERBOSE=true ;;
+  *)
+    usage
+    exit 1
+    ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+if [[ $# -lt 1 ]]; then
+  err "missing container NAME"
+  usage
+  exit 1
+fi
+
+NAME="$1"
+shift
+
+if [[ $# -gt 0 ]]; then
+  err "unexpected argument: $1"
+  exit 1
+fi
+
+# Validate the name: systemd unit names are lowercase and must not contain "/"
+if ! [[ "${NAME}" =~ ^[a-z][a-z0-9._-]*$ ]]; then
+  err "invalid NAME: ${NAME} (expected lowercase letters, digits, '.', '_' or '-')"
+  exit 1
+fi
+
+# Expand a leading ~ in the output directory
+OUT_DIR="${OUT_DIR/#\~/$HOME}"
+
+# Apply defaults derived from the name
+[[ -n "${IMAGE}" ]] || IMAGE="docker.io/library/${NAME}:latest"
+[[ -n "${DESCRIPTION}" ]] || DESCRIPTION="${NAME} container service"
+
+if [[ -n "${HOST_PORT}" ]] && ! [[ "${HOST_PORT}" =~ ^[0-9]{4}$ ]]; then
+  err "invalid --port: ${HOST_PORT} (expected a 4-digit number)"
+  exit 1
+fi
+
+if ! [[ "${CONTAINER_PORT}" =~ ^[0-9]+$ ]]; then
+  err "invalid --container-port: ${CONTAINER_PORT} (expected a number)"
+  exit 1
+fi
+
+# Map a 4-digit host port ABCD to the network IP 10.26.AB.CD.
+# The 10# prefix forces base 10 so that a leading zero is stripped.
+if [[ -n "${HOST_PORT}" && -z "${NETWORK_IP}" ]]; then
+  NETWORK_IP="10.26.$((10#${HOST_PORT:0:2})).$((10#${HOST_PORT:2:2}))"
+fi
+
+# Build the PublishPort / Network lines.
+# Without --port both are emitted as comments with placeholders.
+if [[ -n "${HOST_PORT}" ]]; then
+  PUBLISH_LINE="PublishPort=127.0.0.1:${HOST_PORT}:${CONTAINER_PORT}"
+else
+  PUBLISH_LINE="#PublishPort=127.0.0.1:<port>:${CONTAINER_PORT}"
+fi
+
+if [[ -n "${NETWORK_IP}" ]]; then
+  NETWORK_LINE="Network=${NETWORK}:ip=${NETWORK_IP}"
+else
+  NETWORK_LINE="#Network=${NETWORK}:ip=<ip>"
+fi
+
+# Build the Volume lines: active when requested, commented out otherwise.
+if ${GEN_VOLUME}; then
+  VOLUME_DATA_LINE="Volume=${NAME}_data.volume:/data:Z"
+else
+  VOLUME_DATA_LINE="#Volume=${NAME}_data.volume:/data:Z"
+fi
+
+if ${GEN_CONF_D}; then
+  VOLUME_CONF_D_LINE="Volume=./${NAME}.conf.d:/config:Z"
+else
+  VOLUME_CONF_D_LINE="#Volume=./${NAME}.conf.d:/config:Z"
+fi
+
+# User= only makes sense when the container does not run as root
+if [[ -n "${CONTAINER_USER}" ]]; then
+  USER_LINE="User=${CONTAINER_USER}"
+else
+  USER_LINE="#User=<uid:gid>"
+fi
+
+function render_container() {
+  cat <<EOF
+[Unit]
+Description=${DESCRIPTION}
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+Image=${IMAGE}
+
+ContainerName=${NAME}
+
+#Exec=<command args>
+
+StopTimeout=10
+#StopSignal=SIGINT
+
+EnvironmentFile=%h/.config/containers/systemd/${NAME}.env
+
+${USER_LINE}
+#Secret=<secret-name>,target=/secrets/<KEY>,mode=0400
+#Tmpfs=/tmp:rw,size=1g,mode=1777
+
+${VOLUME_DATA_LINE}
+${VOLUME_CONF_D_LINE}
+
+${PUBLISH_LINE}
+
+${NETWORK_LINE}
+
+PodmanArgs=--cpus=${CPUS}
+PodmanArgs=--memory=${MEMORY}
+PodmanArgs=--memory-reservation=${MEMORY_RESERVATION}
+
+LogDriver=journald
+
+HealthCmd=wget --no-verbose --tries=1 --spider http://127.0.0.1:${CONTAINER_PORT}/health
+#HealthStartPeriod=10s
+HealthInterval=60s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target
+EOF
+}
+
+function render_env() {
+  cat <<EOF
+TZ=${TIMEZONE}
+EOF
+}
+
+function render_volume() {
+  cat <<EOF
+[Volume]
+EOF
+}
+
+# Print the content that would be written, prefixed by its path.
+function show() {
+  local path="$1" content="$2"
+  echo "----- ${path} -----"
+  echo "${content}"
+}
+
+# Write content to a file unless dry-run; refuse to clobber without --force.
+function emit() {
+  local path="$1" content="$2"
+
+  if [[ -e "${path}" && ${FORCE} == false ]]; then
+    err "already exists: ${path} (use -f/--force to overwrite)"
+    exit 1
+  fi
+
+  if ${DRY_RUN}; then
+    show "${path}" "${content}"
+    return
+  fi
+
+  printf '%s\n' "${content}" >"${path}"
+  if ${VERBOSE}; then
+    show "${path}" "${content}"
+  fi
+  info "created: ${path}"
+}
+
+function main() {
+  step "Generating Quadlet files for ${NAME}"
+
+  if [[ ! -d "${OUT_DIR}" ]]; then
+    if ${DRY_RUN}; then
+      warn "[dry-run] directory does not exist: ${OUT_DIR}"
+    else
+      err "directory not found: ${OUT_DIR}"
+      exit 1
+    fi
+  fi
+
+  if ! ${DRY_RUN}; then
+    mkdir -p "${OUT_DIR}"
+  fi
+
+  emit "${OUT_DIR}/${NAME}.container" "$(render_container)"
+  emit "${OUT_DIR}/${NAME}.env" "$(render_env)"
+
+  if ${GEN_VOLUME}; then
+    emit "${OUT_DIR}/${NAME}_data.volume" "$(render_volume)"
+  fi
+
+  if ${GEN_CONF_D}; then
+    if ${DRY_RUN}; then
+      info "[dry-run] would create: ${OUT_DIR}/${NAME}.conf.d/.gitkeep"
+    else
+      mkdir -p "${OUT_DIR}/${NAME}.conf.d"
+      touch "${OUT_DIR}/${NAME}.conf.d/.gitkeep"
+      info "created: ${OUT_DIR}/${NAME}.conf.d/.gitkeep"
+    fi
+  fi
+
+  if ${DRY_RUN}; then
+    info "This was a dry run. No changes were made."
+  else
+    info "Next: systemctl --user daemon-reload && systemctl --user start ${NAME}.service"
+  fi
+}
+
+main "$@"
