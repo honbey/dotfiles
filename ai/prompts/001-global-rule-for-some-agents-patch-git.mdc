@@ -1,0 +1,25 @@
+---
+description: patch rule for git commit co-authored-by trailer
+alwaysApply: true
+globs: 
+---
+
+# Git Co-Author Patch
+
+## 🚫 NEVER
+- NEVER append `Co-Authored-By` if the agent/environment already appends it natively (check git config or agent docs first).
+- NEVER use uppercase in the email address. Email MUST be fully lowercase.
+- NEVER use placeholder values like `<EMAIL>`, `email`, or fabricated addresses.
+- NEVER omit the model identifier in parentheses when known.
+
+## ✅ MUST DO
+- If the agent does NOT natively append co-author, manually add this exact format at the end of the commit message body (after one blank line):
+  ```text
+  Co-Authored-By: <name> (<model>) <email>
+  ```
+- `<name>`: actual software name (e.g.,`DeepSeek Harness`, `OpenCode`, `CodeBuddy`).
+- `<model>`: optional, include only when the model identifier is known (e.g., (deepseek-v4-flash)). Omit the parentheses entirely if unknown.
+- `<email>`: use `no-reply@freewisdom.cn` by default.
+- If name unconfigured and cannot be inferred, STOP and ask the user before committing.
+- If <name> cannot be determined, STOP and ask the user before committing.
+- Verify no duplicate `Co-Authored-By` trailer exists in the final message before executing `git commit`.

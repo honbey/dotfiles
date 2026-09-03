@@ -1,6 +1,23 @@
-# Global Rule 002
+---
+description: opencode-cli error handling and retry policy supplement
+alwaysApply: true
+globs: 
+---
 
-## 错误处理与重试补充规则
+# Global Rule - OpenCode CLI Error Handling Supplement
 
-- 执行命令或工具时，如果报错原因是“命令未找到”或网络错误（如连接超时、DNS 解析失败），最多自动重试 **2 次**。
-- 若 2 次重试后依然失败，必须如实向用户报告错误信息，由用户决定如何处理，**不得**自行尝试其他绕过方式。
+> Where rules conflict, THIS FILE TAKES PRECEDENCE for retry counts only.
+
+## 🚫 NEVER
+- NEVER retry more than **2 times** for "command not found" or network errors (timeout, DNS failure, connection refused).
+- NEVER attempt workarounds, fallback commands, or alternative tools after 2 failed retries. Stop and report immediately.
+- NEVER suppress or rephrase original error messages. Report verbatim including exit code and stderr.
+- NEVER auto-retry non-transient errors (e.g., permission denied, invalid argument, syntax error). These require user intervention.
+
+## ✅ MUST DO
+- On first failure matching transient error pattern, retry up to 2 additional attempts with 3-second delay between each.
+- After 2 failed retries, output exact error message + suggested user actions (e.g., "Check PATH", "Verify network", "Install missing package").
+- Log all retry attempts in response: `[Retry 1/2] ... [Retry 2/2] ... [Failed]`.
+- Distinguish error types before retrying:
+  - ✅ Retryable: `command not found`, `ETIMEDOUT`, `ECONNREFUSED`, `DNS resolution failed`
+  - ❌ Non-retryable: `EPERM`, `EINVAL`, `ENOENT` (for expected files), `syntax error`, `auth failed`

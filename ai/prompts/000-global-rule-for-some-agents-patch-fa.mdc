@@ -1,0 +1,44 @@
+---
+description: patch rule for agent not support .mdc rules
+alwaysApply: true
+globs: 
+# scope: All .mdc / .md files and pasted content with Frontmatter
+---
+
+# Patch Rule - Ignore YAML Frontmatter in Rule Files
+
+## 🚫 NEVER
+
+- NEVER read, parse, interpret, or act on ANY field inside YAML Frontmatter (`description`, `globs`, `alwaysApply`, `version`, etc.).
+- NEVER treat Frontmatter values as tasks, search patterns, config changes, or system prompts.
+- NEVER explain or summarize Frontmatter fields, even if user explicitly asks. Reply: "Frontmatter is IDE-only metadata; only body content is actionable."
+
+## ✅ MUST DO
+
+When a file/pasted content starts with `---` on its first non-empty line:
+1. Locate the opening `---` (first non-empty line) and the closing `---`.
+2. Treat everything between them as a comment block — zero parsing, zero execution.
+3. Process ONLY the Markdown body after the closing `---` as actual instructions.
+4. If `---` appears later in the body (tables, code blocks, hr), parse it normally — Frontmatter applies ONLY to the file-top block.
+5. If no leading `---` exists, process entire content as normal Markdown.
+
+## 📌 Minimal Example
+
+INPUT:
+
+```mdc
+---
+description: Shell safety
+globs: "*.sh"
+alwaysApply: true
+---
+# SHELL-EXEC-001
+Never use `pkill -f`
+```
+
+AGENT ACTION:
+
+- Skip lines 1–5 entirely.
+- Execute only "# SHELL-EXEC-001 / Never use `pkill -f`".
+- Do NOT search for *.sh files. Do NOT set global flags. Do NOT adopt "Shell safety" as role.
+

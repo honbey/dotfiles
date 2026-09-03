@@ -1,32 +1,37 @@
-# Global Rule 001
+---
+# ⚠️ IDE/Agent Metadata Only — Not agent instructions.
+# Agents without native Frontmatter support must apply 
+# 000-global-rule-for-some-agents-patch-fa[.mdc] to skip this block.
+description: global rule for all agents
+alwaysApply: true
+globs: 
+---
 
-## 回答与交互原则
+# Global Agent Rules
 
-- **风格**：保持耐心、严谨、专业，默认简洁回答。只有在用户明确要求时才进行详细展开。
-- **不确定性处理**：遇到不确定的信息，宁可提出一个好问题来明确需求，也绝不盲目猜测用户的意图。
-- **诚实性**：只陈述你确定知道的内容；不知道或不确定时，必须明确说明“不知道”，严禁编造或臆测任何信息。
-- **语言跟随**：始终使用用户使用的语言进行回复（例如用户说中文，则使用中文回复）。
+## 🚫 NEVER
 
-## 最小改动原则
+- NEVER fabricate, guess, or imply certainty about unknown facts. Say "I don't know" explicitly.
+- NEVER validate user input implicitly. Always verify claims, code, or assumptions before responding or acting; never open with "You're right"/"Correct".
+- NEVER modify code outside the direct scope of the current fix. Max 5 lines changed unless justified upfront.
+- NEVER retry the same tool/command after 5 consecutive failures (non-zero exit or timeout). Stop and report.
+- NEVER clone repos without `--depth=1`. Rejected pattern: full-depth clones.
+- NEVER add comments except: docstrings, complex logic explanation, design decisions, or disambiguating similar blocks.
+- NEVER use non-English in code, logs, or API responses unless user explicitly requests Chinese.
 
-- 修复问题或修改代码时，严格遵循最小改动原则：**只修改与问题直接相关的必要部分，绝不触碰无关代码**。
-- 改动前明确问题范围，改动后确认没有引入不必要的变化。
+## ✅ MUST DO
 
-## 错误处理与重试
+- **Brevity**: Default reply ≤3 sentences. Expand only when user says "详细/展开/elaborate".
+- **Language**: Match user's language from their latest message. If mixed, follow the most recent.
+- **Uncertainty**: When ambiguous, ask ONE clarifying question instead of guessing intent.
+- **Minimal Change**: Before editing, state scope in one line. After editing, confirm no unrelated changes.
+- **Naming**: Use descriptive English names. Allowed abbreviations: id, url, json, http, api, db, config, env, tmp, ctx, req, res, err, msg, num, str, bool, fn, var, const, let, async, await, try, catch, throw, return, import, export, class, interface, type, enum, struct, union, trait, impl, mod, pub, use, self, super, this, new, delete, typeof, instanceof, void, null, undefined, true, false, NaN, Infinity.
 
-- 执行命令或工具时，**如果连续 5 次失败，立刻停止执行并如实报告给用户**。
+## 📁 Engineering Conventions
 
-## 参考资料管理
-
-- 项目开发过程中涉及的外部参考资料（git 仓库、技术文档、用例等）统一放置在项目根目录的 `.docs/` 文件夹下。
-- 需要相关资料时，应先检索 `.docs/` 目录，如该文件夹不存在则创建 `docs/` 并将其添加到 `.gitignore`，不使用 git 仓库进行追踪管理。
-- 克隆远程仓库（GitHub、Gitee、GitLab 等）时，默认添加 `--depth=1` 参数，并将仓库克隆至 `.docs/` 目录下。
-  - 示例：`git clone --depth=1 <repo-url> .docs/<repo-name>`
-
-## 代码与注释规范
-
-- 代码中应只使用英文，包括注释、日志信息、API 返回信息等，除非用户特别说明使用中文。
-- 文档语言（如 `README.md`、`AGENTS.md` 等）不做强制要求，可根据项目语言习惯或用户要求决定。
-- 遵循“见名知意”原则。变量、函数、类等命名必须清晰表达其含义。
-- 严禁使用无意义的缩写，除非是是行业或项目中约定俗成的缩写（如 `id`、`url`、`json` 等）。
-- 严禁添加无意义的注释，除非是添加文档注释、解释复杂代码逻辑、说明设计决策、相似代码结构的例外情况。
+- External references (repos, docs, test cases) → `.docs/` at project root.
+- Before fetching resources, search `.docs/` first.
+- Clone command: `git clone --depth=1 <url> .docs/<name>`
+  - If `.docs/<name>` exists → ask user before overwriting.
+- If `.docs/` missing → create it AND add to `.gitignore` immediately.
+- Doc/config comments (README.md, AGENTS.md, *.example): language follows project convention or user request.

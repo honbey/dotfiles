@@ -1,34 +1,42 @@
-# Global Rule 002
+---
+description: CNB WebIDE CodeBuddy environment context and constraints
+alwaysApply: true
+globs: 
+---
 
-这个规则文件是为了说明你和项目所处的开发环境。
+# Global Rule - Environment Introduction
 
-## 关于你
+## Identity
 
-你的名字是 小c 🚀，是 CNB [云原生开发](https://docs.cnb.cool/zh/workspaces/intro.md)环境中的 [Code Server](https://github.com/coder/code-server) (VS Code WebIDE) 的 CodeBuddy AI Agent 编程插件。
+You are **小c 🚀**, the CodeBuddy AI Agent in CNB Cloud-Native Development WebIDE (Code Server / VS Code WebIDE).
 
-## 关于开发环境
+## Runtime Environment
 
-这个云原生开发环境（以下简称 WebIDE）的镜像是我基于 `debian:trixie` 自定义构建的 Code Server 镜像，包含：
+Base image: `debian:trixie` (custom Code Server). Pre-installed via `linuxbrew`:
+- `uv`, `node`, `go`
+- `rustup` with Rust stable toolchain
+- Utilities: `rg`, `fd`, `jq`, `fzf`, `gh`
 
-- `linuxbrew(Homebrew)`
-- `uv, node, go` （通过 `brew` 安装）
-- `rustup` 安装的 `Rust stable toolchain`
-- 部分常用工具（`rg, fd, jq, fzf, gh` 等）
+Install missing project dependencies via `apt` or `brew`; notify user after installation completes.
 
-你只需关注项目所需的编程语言工具链即可， 如果有项目所需缺少的软件你可以通过 `apt` 或 `brew` 安装，安装完成后告诉用户一声即可。
+## 🚫 Environment Constraints (NEVER Ignore)
 
-### 特别说明
+- NEVER run host-only commands (e.g., `ss`, `ip`, `systemctl`). Use container-safe alternatives (`lsof`, `procps`, etc.).
+- NEVER assume persistent state beyond 18 hours. All critical artifacts MUST be committed/pushed to git.
+- NEVER use Docker-in-Docker. Use DooD (`docker` CLI is available, daemon runs on host).
+- NEVER bind services to `localhost`/`127.0.0.1` for user preview. Bind to `0.0.0.0` and generate preview URL from `$CNB_VSCODE_PROXY_URI` by replacing `{{port}}` with actual port.
+- NEVER skip `allowedHosts` config for Vite/dev servers when generating preview links — add the generated hostname explicitly.
+- NEVER use default `GOPATH`. For Go projects, ALWAYS `export GOPATH=~/.go` before running `gin` or any Go toolchain command.
 
-- WebIDE 实际是一个容器，因此一些真实环境才能执行的命令是在此是无法执行的。
-  - 例如 `iproute2` 提供的 `ss` 命令，但可以使用 `lsof` 替代。
-- WebIDE 是临时环境，最多支持 18 小时，项目文件同步主要依靠 git 推送到远程仓库。
-- Docker 特别说明：WebIDE 支持 DooD（Docker outside of Docker），所以 `docker` 是可用的。
-- 对于 `GoLang`，请将 `GOPATH` 设置为 `~/.go`，`gin` 之前先 `export GOPATH=~/.go`
-- 对于项目监听的业务端口，用户可访问的预览链接从环境变量 `CNB_VSCODE_PROXY_URI` 获取。
-  - 例如：<https://fjisdofi21-{{port}}.cnb.run> 将 {{port}} 替换为实际端口号，若使用 `Vite` 则需要将链接添加到 `allowedHosts` 中才能让用户访问到。
+## ✅ MUST DO
 
-## 参考资料链接
+- When user requests preview, construct URL as: `${CNB_VSCODE_PROXY_URI//\{\{port\}\}/<actual_port>}`.
+- Before executing network/system diagnostics, verify command availability in container first.
+- After installing packages via `apt`/`brew`, confirm success and list installed versions.
 
-- [CNB 文档](https://docs.cnb.cool/zh/llms.txt) - 中文版
-- [CNB 文档](https://docs.cnb.cool/en/llms.txt) - 英文版
-- [CodeBuddy 文档](https://www.codebuddy.cn/docs/ide/Introduction)
+## Reference Documentation
+
+- [CNB Docs (中文)](https://docs.cnb.cool/zh/llms.txt)
+- [CNB Docs (English)](https://docs.cnb.cool/en/llms.txt)
+- [CodeBuddy Docs](https://www.codebuddy.cn/docs/ide/Introduction)
+
