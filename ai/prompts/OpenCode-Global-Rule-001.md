@@ -1,1 +1,0 @@
-CodingAgent-Global-Rule-001.md
