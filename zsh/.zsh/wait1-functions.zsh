@@ -11,10 +11,10 @@ function generate_passwd() {
   # alnum = full letters+digits, symbols = letters+digits+symbols.
   # Any other value is used as a custom charset directly.
   case "${2:-safe}" in
-    safe)    charset="23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz" ;;
-    alnum)   charset="A-Za-z0-9" ;;
-    symbols) charset="A-Za-z0-9!@#$%^&*()_+{}[]|:;<>,.?~" ;;
-    *)       charset="$2" ;;
+  safe) charset="23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz" ;;
+  alnum) charset="A-Za-z0-9" ;;
+  symbols) charset="A-Za-z0-9!@#$%^&*()_+{}[]|:;<>,.?~" ;;
+  *) charset="$2" ;;
   esac
   type openssl &>/dev/null && openssl_existed=true || openssl_existed=""
   [[ -n "$3" && "${openssl_existed}" ]] && hashed=true || hashed=""
@@ -96,3 +96,117 @@ function t() {
       "select word,phonetic,definition,exchange,translation from stardict where word like '${1:-China}'"
   fi
 }
+
+# smart_mv - `mv` that transparently uses `git mv` for git-tracked files.
+#
+# Install in ~/.zshrc:
+#   smart_mv() { ... }
+#   alias mv='smart_mv'
+#
+# `git mv` is used only when every one of these holds, otherwise the arguments
+# are forwarded verbatim to `mv`, so the alias is always safe:
+#   * at least two operands (source... destination)
+#   * only options `git mv` understands are given (-f/--force, -v/--verbose, --)
+#   * cwd is inside a git working tree
+#   * every source is tracked, is not a submodule and holds no untracked
+#     (non-ignored) files below it
+#   * the destination stays inside the same working tree and is not a submodule
+smart_mv() {
+  if [ "$" -eq 0 ]; then
+    command mv
+    return $?
+  fi
+
+  # --- split leading options --------------------------------------------
+  # -i/-n/-b/-t/-T/-u/-S/--backup/... have no `git mv` equivalent, `-n` even
+  # means the opposite (`--dry-run`), so they fall back to `mv`.
+  local arg rest
+  local force="" verbose="" unsupported="" endopts=0 optc=0
+  for arg in "$@"; do
+    if [ "$endopts" -eq 0 ]; then
+      case "$arg" in
+      --) endopts=1 ;;
+      --force) force=1 ;;
+      --verbose) verbose=1 ;;
+      -[A-Za-z]*)
+        case "$arg" in *f*) force=1 ;; esac
+        case "$arg" in *v*) verbose=1 ;; esac
+        rest="${arg#-}"
+        [ -n "${rest//[fv]/}" ] && unsupported=1
+        ;;
+      -*) unsupported=1 ;;
+      *) break ;;
+      esac
+      optc=$((optc + 1))
+      continue
+    fi
+    break
+  done
+
+  # --- collect operands --------------------------------------------------
+  local -a operands
+  local i=0
+  for arg in "$@"; do
+    i=$((i + 1))
+    [ "$i" -gt "$optc" ] && operands+=("$arg")
+  done
+
+  if [ -n "$unsupported" ] || [ "$" -le "$optc" ] || [ "$(($# - optc))" -lt 2 ]; then
+    command mv "$@"
+    return $?
+  fi
+
+  # --- can `git mv` handle it? -------------------------------------------
+  local count=$(($# - optc))
+  local dest="${operands[-1]}"
+  local -a srcs
+  local n=0
+  for arg in "${operands[@]}"; do
+    n=$((n + 1))
+    [ "$n" -lt "$count" ] && srcs+=("$arg")
+  done
+
+  local use_git=1
+  (
+    local src top dst_abs
+    command -v git >/dev/null 2>&1 || exit 1
+    [ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" = "true" ] || exit 1
+    top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 1
+    [ -n "$top" ] || exit 1
+
+    case "$dest" in
+    /*) dst_abs="$dest" ;;
+    *) dst_abs="$PWD/$dest" ;;
+    esac
+    case "$dst_abs/" in "$top"/*) ;; *) exit 1 ;; esac
+
+    # a submodule is not a directory you can move files into
+    case "$(git ls-files -s -- ":(literal)$dest" 2>/dev/null)" in 160000*) exit 1 ;; esac
+
+    for src in "${srcs[@]}"; do
+      # untracked source
+      git ls-files --error-unmatch -- ":(literal)$src" >/dev/null 2>&1 || exit 1
+      # submodule (gitlink)
+      case "$(git ls-files -s -- ":(literal)$src" 2>/dev/null)" in 160000*) exit 1 ;; esac
+      # `git mv` refuses to move a tree holding untracked files
+      [ -z "$(git ls-files --others --exclude-standard -- ":(literal)$src" 2>/dev/null)" ] || exit 1
+    done
+  ) || use_git=
+
+  if [ -z "$use_git" ]; then
+    command mv "$@"
+    return $?
+  fi
+
+  # `mv` overwrites an existing destination by default, `git mv` needs -f
+  [ -e "$dest" ] && force=1
+
+  set -- "${operands[@]}"
+  [ -n "$verbose" ] && set -- -v "$@"
+  [ -n "$force" ] && set -- -f "$@"
+  [ "$endopts" -eq 1 ] && set -- -- "$@"
+  git mv "$@"
+  return $?
+}
+
+alias mv='smart_mv'
