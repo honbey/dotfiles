@@ -62,5 +62,4 @@ zinit wait lucid light-mode for \
 
 ### Plugins(wait 1)
 zinit wait'1' lucid light-mode depth'1' for \
-  voronkovich/gitignore.plugin.zsh \
-  MichaelAquilina/zsh-you-should-use
+  voronkovich/gitignore.plugin.zsh

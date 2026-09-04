@@ -112,7 +112,7 @@ function t() {
 #     (non-ignored) files below it
 #   * the destination stays inside the same working tree and is not a submodule
 smart_mv() {
-  if [ "$" -eq 0 ]; then
+  if [ "$#" -eq 0 ]; then
     command mv
     return $?
   fi
@@ -151,7 +151,7 @@ smart_mv() {
     [ "$i" -gt "$optc" ] && operands+=("$arg")
   done
 
-  if [ -n "$unsupported" ] || [ "$" -le "$optc" ] || [ "$(($# - optc))" -lt 2 ]; then
+  if [ -n "$unsupported" ] || [ "$#" -le "$optc" ] || [ "$(($# - optc))" -lt 2 ]; then
     command mv "$@"
     return $?
   fi
@@ -210,3 +210,81 @@ smart_mv() {
 }
 
 alias mv='smart_mv'
+
+# Alias tips - nudge you when the command you just ran already has an alias.
+#
+# A standalone replacement for `djui/alias-tips` /
+# `MichaelAquilina/zsh-you-should-use`, hooked on `preexec`:
+#
+#     $ ls -Ahl
+#     Alias: ll
+#
+# On top of what those two do, a command typed with a leading space is never
+# nagged about - exactly like a leading space keeps it out of the history - so
+# there is always a quick way to opt out of the tip.
+#
+# Tunables (all optional, set them before this file is sourced):
+#   ALIAS_TIP_ENABLED=0       # 0 switches the whole feature off
+#   ALIAS_TIP_WRAPPERS=1      # also tip wrapping aliases, e.g. ls='ls --color=auto'
+#   ALIAS_TIP_IGNORE=(ll la)  # alias names that should never be suggested
+#   ALIAS_TIP_PREFIX="..."    # text printed in front of the tip
+#   * return null
+(( ${+ALIAS_TIP_IGNORE} )) || typeset -ga ALIAS_TIP_IGNORE=()
+
+function _alias_tip_preexec() {
+  emulate -L zsh
+
+  (( ${ALIAS_TIP_ENABLED:-1} )) || return 0
+  # `$aliases` comes from zsh/parameter, without it there is nothing to compare.
+  (( ${+aliases} )) || zmodload zsh/parameter 2>/dev/null || return 0
+
+  local typed="$1"
+
+  # A leading space keeps a command out of the history, so it must keep it out
+  # of the tips as well.  zsh also hands `preexec` an empty string when the line
+  # was dropped from the history buffer (HIST_IGNORE_SPACE / HISTORY_IGNORE);
+  # that ends up here as the very same thing: no reliable line, no tip.
+  [[ -n "${typed}" ]] || return 0
+  [[ "${typed}" != [[:space:]]* ]] || return 0
+
+  # Trim the trailing whitespace, then split into shell words (quotes respected).
+  typed="${typed%"${typed##*[![:space:]]}"}"
+  local -a words
+  words=("${(@Q)${(z)typed}}")
+  (( ${#words} )) || return 0
+
+  # Look for the alias covering the longest prefix of the typed command.
+  # Only `$aliases` is scanned, so global (`alias -g`) and suffix (`alias -s`)
+  # aliases are never suggested.
+  local name value best_name="" prefix
+  local -a awords
+  local i n best_len=0 hit=0
+  for name in ${(k)aliases}; do
+    (( ${ALIAS_TIP_IGNORE[(I)${name}]} )) && continue
+    value="${aliases[${name}]}"
+    # cheap pre-filter: the alias has to start with the same command
+    [[ "${words[1]}" == "${value%%[[:space:]]*}" ]] || continue
+    awords=("${(@Q)${(z)value}}")
+    n=${#awords}
+    (( n > 0 && n <= ${#words} )) || continue
+    # `ls='ls --color=auto'` only appends flags, tipping it is pure noise
+    (( ${ALIAS_TIP_WRAPPERS:-0} )) || [[ "${name}" != "${awords[1]}" ]] || continue
+    hit=1
+    for ((i = 1; i <= n; i++)); do
+      [[ "${words[i]}" == "${awords[i]}" ]] || hit=0
+      (( hit )) || break
+    done
+    (( hit && n > best_len )) || continue
+    best_len=${n}
+    best_name="${name}"
+  done
+  [[ -n "${best_name}" ]] || return 0
+
+  prefix="${ALIAS_TIP_PREFIX:-Alias:}"
+  print -r -- "${prefix} ${best_name}"
+}
+
+# Register only once, re-sourcing this file must not stack duplicate hooks.
+if (( ${preexec_functions[(I)_alias_tip_preexec]:-0} == 0 )); then
+  preexec_functions+=(_alias_tip_preexec)
+fi

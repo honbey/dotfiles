@@ -22,6 +22,8 @@ setopt hist_ignore_all_dups
 setopt hist_reduce_blanks
 setopt hist_save_no_dups
 
+setopt no_auto_remove_slash
+
 # ENV
 [[ -f "${HOME}/.env" ]] && source "${HOME}/.env"
 # Custom config for specific machine
