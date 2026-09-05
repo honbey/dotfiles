@@ -30,7 +30,7 @@ Install missing project dependencies via `apt` or `brew`; notify user after inst
 ## ✅ MUST DO
 
 - When user requests preview, construct URL as: `${CNB_VSCODE_PROXY_URI//\{\{port\}\}/<actual_port>}`.
-- You may bind dev servers to `localhost`/`127.0.0.1`; Code Server will port-forward these correctly.
+- You may bind dev servers to `0.0.0.0`; Code Server will port-forward these correctly so user can preview.
 - Before executing network/system diagnostics, verify command availability in container first.
 - After installing packages via `apt`/`brew`, confirm success and list installed versions.
 

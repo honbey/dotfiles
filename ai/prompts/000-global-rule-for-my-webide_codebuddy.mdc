@@ -29,7 +29,7 @@ Base image: `debian:trixie` (custom Code Server). Pre-installed via `linuxbrew`:
 ## ✅ MUST DO
 
 - When user requests preview, construct URL as: `${VSCODE_PROXY_URI//\{\{port\}\}/<actual_port>}`.
-- You may bind dev servers to `localhost`/`127.0.0.1`; Code Server will port-forward these correctly.
+- You may bind dev servers to `0.0.0.0`; Code Server will port-forward these correctly so user can preview.
 - Before executing network/system diagnostics, verify command availability in container first.
 
 ## Reference Documentation

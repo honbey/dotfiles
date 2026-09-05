@@ -1,0 +1,62 @@
+---
+description: Sensitive file protection - forbid reading full .env/secrets files; allow key-only extraction and masked single-value retrieval with explicit user consent.
+alwaysApply: true
+globs:
+---
+
+# Sensitive Information Protection - No Full Read of Env Files
+
+## 🚫 NEVER (Absolute Prohibitions)
+
+- NEVER use `cat`, `read_file`, `view`, `type`, or any file-reading tool/command to read the **full content** of `.env`, `.env.*` (e.g. `.env.local`, `.env.production`), `secrets.yml`, `credentials.json`, or any other file known to contain credentials.
+- NEVER generate commands that dump entire sensitive files, including but not limited to:
+  - `cat .env`
+  - `less .env.production`
+  - `vim .env` (in non-interactive scripts)
+  - `find . -name ".env" -exec cat {} \;`
+- NEVER read an entire env file even if the user asks for general debugging or configuration inspection. You may only extract keys or, with explicit user instruction, a specific named value.
+
+## ✅ MUST DO
+
+- When you need to know which **variable names** exist in an env file (e.g. to check key spelling, plan configuration changes, or add new variables), extract **only the keys**, never the values:
+  - Command: `grep -E '^[A-Z_][A-Z0-9_]*=' .env | cut -d'=' -f1`
+  - This outputs only key names like `DATABASE_URL`, `API_KEY`, `JWT_SECRET`.
+- If the user explicitly asks for the **value** of a specific variable (e.g. “check if DB_PASSWORD is correct”), you MUST:
+  1. Retrieve only that single line: `grep '^DB_PASSWORD=' .env`
+  2. When displaying the value, mask the middle part with `******`, revealing only the first 2 and last 2 characters for verification (e.g. `DB_PASSWORD=db******23`).
+  3. Prefix the output with a warning: `*Note: The following output contains sensitive information. Please clear logs after viewing.*`
+- If your environment has any automatic context-enhancement feature that reads project files, it MUST ignore `.env`-type files by default, or require explicit user consent before including them.
+
+## 📌 Examples
+
+### ❌ Forbidden
+
+```bash
+# NEVER read full .env
+cat .env
+
+# NEVER use less/more to view
+less .env.production
+
+# NEVER batch-read via find/xargs
+find . -name ".env" -exec cat {} \;
+```
+
+### ✅ Allowed
+
+```bash
+# Extract only variable names (keys)
+grep -E '^[A-Z_][A-Z0-9_]*=' .env | cut -d'=' -f1
+
+# If user explicitly requests a specific variable, extract that line only
+grep '^API_KEY=' .env
+# Then display with masking and warning
+```
+
+## ⚠️ Rationale (brief)
+
+`.env` files contain plaintext secrets (database URLs, API keys, JWT private keys). 
+Reading them in full exposes credentials to logs, context, and potential data exfiltration, 
+and wastes context window space. Always prefer key-only extraction; for single values, 
+retrieve only the requested line and mask the actual secret. 
+If unsure, tell the user to check the value themselves rather than outputting it.

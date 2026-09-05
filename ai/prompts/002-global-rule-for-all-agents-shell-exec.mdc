@@ -1,5 +1,5 @@
 ---
-description: Shell process termination safety - forbid pgrep -f + pkill/kill, enforce exact match or PID file, require pre-kill verification.
+description: Shell process termination safety - prevent agent self-kill and tool call failures.
 alwaysApply: true
 globs:
 ---
@@ -8,50 +8,49 @@ globs:
 
 ## 🚫 NEVER (Absolute Prohibitions)
 
-- NEVER use `pgrep -f` together with `pkill`, `kill`, `xargs kill`, or any command substitution that passes PIDs to a termination command.
-- NEVER generate any pattern where `pgrep -f "..."` output is used as PID list for killing, e.g.:
-  - `pkill -f "process_name"`
-  - `kill $(pgrep -f "process_name")`
-  - `pgrep -f "process_name" | xargs kill`
-- NEVER kill a process based on full command line match (`-f`) unless a prior explicit `pgrep -a` output has been shown and user confirmed each PID.
-- NEVER bulk-kill multiple PIDs from a `pgrep -f` result without individual confirmation.
+- NEVER run `pkill -f "pattern"` directly, without any protection.
+- NEVER run `kill $(pgrep -f "pattern")` or `pgrep -f "pattern" | xargs kill` directly, without excluding current shell/agent PID and without checking match count.
+- NEVER pass PIDs from `pgrep -f` to any kill command without first filtering out the current shell PID (`$$`).
 - NEVER use `kill -9` as the first signal. Prefer `TERM`, then `KILL` only if process does not exit after a reasonable timeout and user approves.
 
-## ✅ MUST DO (Mandatory Alternatives)
-When terminating a process, you MUST follow this priority order:
+## ✅ MUST DO (Safe Execution Flow)
 
-1. **Use PID file if available**  
-   `kill $(cat /var/run/app.pid)` or `kill $(cat /tmp/backend.pid)`
+When terminating a process, follow this priority order. You are allowed to execute automatically if conditions below are met; do **not** ask the user for confirmation every time.
+
+1. **PID file (preferred if available)**  
+   `kill $(cat /var/run/app.pid)` or `kill $(cat /tmp/backend.pid)`  
+   This is always safe and does not require user confirmation.
 
 2. **Exact process name match (no `-f`)**  
    `pkill -x "process_name"` or `kill $(pgrep -x "process_name")`  
-   This matches only the executable name (comm), not arguments.
+   This matches only the executable name (comm), not arguments. Safe in most cases; no confirmation needed.
 
-3. **If full command line match is unavoidable (`-f`)**, you MUST:  
-   - First run `pgrep -a -f "pattern"` to list candidate processes with full command lines.  
-   - Show the output to the user and wait for explicit approval.  
-   - Exclude current shell PID: `pgrep -f "pattern" | grep -v $$`  
-   - Never automatically kill if more than one PID is returned; instead, ask the user to specify exactly which PID(s) to kill.
-
-## 📋 Pre-Kill Verification (MANDATORY)
-
-Before executing any `kill` command, you MUST perform these steps in order:
-
-1. **Preview**: Run `pgrep -a "process_name_or_pattern"` to see exactly which PIDs and command lines would match.  
-2. **Self-exclusion**: If using `-f`, include `grep -v $$` to exclude the current shell/agent process.  
-3. **Count check**: If the preview returns more than 1 PID, STOP and ask the user for clarification. Do NOT proceed with bulk kill.
+3. **Full command line match (`-f`) — only when necessary**  
+   If exact name matching is insufficient and you must use `-f`, you MUST perform these steps automatically before killing:
+   - Run `pgrep -a -f "pattern"` to list candidate processes.
+   - Exclude current shell/agent PID: `pgrep -f "pattern" | grep -v $$`
+   - Evaluate the remaining PID count:
+     - **Exactly 1 PID remaining** → kill it directly. No user confirmation needed.
+     - **Multiple PIDs but all belong to the same logical service/process group** (e.g., multiple workers of the same app) and the user’s intent to stop that service is clear from context → kill all remaining PIDs. No additional confirmation needed.
+     - **Multiple PIDs of different/unrelated processes** → STOP and ask the user to specify which PID(s) to kill. This is the only case where confirmation is required.
+   - Execute kill only after the above checks.
 
 ## 📌 Examples
 
-### ❌ Forbidden
+### ❌ Forbidden (will cause self-kill or collateral damage)
 
 ```bash
-pgrep -f "mysql" && pkill -f "mysql"
+# Direct pkill -f without any protection
+pkill -f "mysql"
+
+# Command substitution without excluding self
 kill -9 $(pgrep -f "backend.jar")
+
+# Piping pgrep -f to kill without filtering
 pgrep -f "java.*app" | xargs kill
 ```
 
-### ✅ Allowed
+### ✅ Allowed (safe, can be executed automatically)
 
 ```bash
 # Exact name match
@@ -60,11 +59,17 @@ pkill -x "redis-server"
 # PID file
 kill $(cat /tmp/backend.pid)
 
-# Full command line match after user confirmation, excluding self
+# Full command line match with self-exclusion and single remaining PID
 PIDS=$(pgrep -f "java.*backend.jar" | grep -v $$)
-[ -n "$PIDS" ] && echo "$PIDS" | xargs kill
+if [ $(echo "$PIDS" | wc -l) -eq 1 ]; then
+    kill $PIDS
+fi
+
+# Full command line match, multiple PIDs of same service, user intent clear
+pkill -f "nginx: worker process"   # after ensuring current shell not matched
 ```
 
 ## ⚠️ Rationale (brief)
 
-`pgrep -f` matches full command line including arguments and scripts, creating self-kill risk and collateral damage. Use exact match or PID files. When in doubt, always ask.
+The goal is to prevent agent self-kill and tool-call interruption, not to require endless confirmations. 
+Follow the safe flow above; ask user only when the match is ambiguous and cannot be safely resolved automatically.
