@@ -20,10 +20,17 @@ StopTimeout=10
 EnvironmentFile=%h/.config/containers/systemd/code-server.env
 
 Tmpfs=/tmp:rw,size=1g,mode=1777
-Volume=./code-server.conf.d:/root/.config/code-server:Z
+# caches or unimportant files in HDD
+Volume=/opt/data/cache/code-server/share:/share:Z
+Volume=/opt/data/cache/code-server/tmp-data:/tmp-data:Z
+Volume=/opt/data/cache/code-server/cache:/root/.cache:Z
+Volume=/opt/data/cache/code-server/cache-linuxbrew:/home/linuxbrew/.cache:Z
+Volume=/opt/data/cache/code-server/npm:/root/.npm:Z
+# entrypointd and data
+Volume=./code-server.conf.d/entrypointd/:/entrypoint.d:Z
 Volume=code-server_data.volume:/root:Z
 
-PublishPort=127.0.0.1:1040:8080
+PublishPort=127.0.0.1:1040:8686
 
 Network=10_26_0_1.network:ip=10.26.10.40
 
@@ -34,7 +41,7 @@ PodmanArgs=--memory-reservation=128m
 
 LogDriver=journald
 
-HealthCmd=curl -fsS http://localhost:8080/healthz
+HealthCmd=curl -fsS http://localhost:8686/healthz
 HealthStartPeriod=10s
 HealthInterval=60s
 HealthTimeout=10s

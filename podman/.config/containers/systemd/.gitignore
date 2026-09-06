@@ -9,4 +9,6 @@
 *.conf.d/*
 !*.conf.d
 !*.conf.d/.gitkeep
-!code-server.conf.d/entrypointd/*
+
+# add by git add -f
+!code-server.conf.d/entrypoint.d/rm_cnb_extension.sh
