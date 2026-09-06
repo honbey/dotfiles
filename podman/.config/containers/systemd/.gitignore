@@ -9,3 +9,4 @@
 *.conf.d/*
 !*.conf.d
 !*.conf.d/.gitkeep
+!code-server.conf.d/entrypointd/*
