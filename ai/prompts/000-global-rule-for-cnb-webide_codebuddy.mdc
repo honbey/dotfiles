@@ -21,7 +21,7 @@ Install missing project dependencies via `apt` or `brew`; notify user after inst
 
 ## 🚫 Environment Constraints (NEVER Ignore)
 
-- NEVER run host-only commands (e.g., `ss`, `ip`, `systemctl`). Use container-safe alternatives (`lsof`, `procps`, etc.).
+- NEVER run host-only commands (e.g., `systemctl`).
 - NEVER assume persistent state beyond 18 hours. All critical artifacts MUST be committed/pushed to git.
 - NEVER use Docker-in-Docker. Use DooD (`docker` CLI is available, daemon runs on host).
 - NEVER skip `allowedHosts` config for Vite/dev servers when generating preview links — add the generated hostname explicitly.
@@ -40,4 +40,3 @@ Install missing project dependencies via `apt` or `brew`; notify user after inst
 - [CNB Docs (English)](https://docs.cnb.cool/en/llms.txt)
 - [CodeBuddy Docs](https://www.codebuddy.cn/docs/ide/Introduction)
 - [Code Server Guide](https://coder.com/docs/code-server/guide)
-
