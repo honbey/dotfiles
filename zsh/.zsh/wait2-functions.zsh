@@ -4,9 +4,9 @@
 function _count_graveyard() {
   local size=$(du --summarize --bytes ${HOME}/.graveyard | awk '{print $1}')
   if [[ ${size} -gt 3221225472 ]]; then
-    echo -e "\nThe graveyard space has exceeded 3GB.\nPlease clean it up!"
+    echo -e "\nThe graveyard space has exceeded 3GiB.\nPlease clean it up!"
   elif [[ $1 == "run" ]]; then
-    echo -e "Graveyard size: $((${size} / (2 ** 20)))MB."
+    echo -e "Graveyard size: $((${size} * 1.0 / (2 ** 20)))MiB."
   fi
 }
 

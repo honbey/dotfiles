@@ -26,9 +26,15 @@ Volume=/opt/data/cache/code-server/tmp-data:/tmp-data:Z
 Volume=/opt/data/cache/code-server/cache:/root/.cache:Z
 Volume=/opt/data/cache/code-server/cache-linuxbrew:/home/linuxbrew/.cache:Z
 Volume=/opt/data/cache/code-server/npm:/root/.npm:Z
-# entrypointd and data
-Volume=./code-server.conf.d/entrypointd/:/entrypoint.d:Z
-Volume=code-server_data.volume:/root:Z
+# entrypointd, configs, data
+Volume=./code-server.conf.d/entrypoint.d/:/entrypoint.d:Z
+Volume=./code-server.conf.d/sync/snippets:/root/.local/share/code-server/User/snippets:Z
+Volume=./code-server.conf.d/sync/settings.json:/root/.local/share/code-server/User/settings.json:Z
+Volume=./code-server.conf.d/sync/keybindings.json:/root/.local/share/code-server/User/keybindings.json:Z
+Volume=./code-server.conf.d/sync/.zsh_history:/root/.zsh_history:Z
+Volume=./code-server.conf.d/sync/.local.zsh:/root/.local.zsh:Z
+Volume=./code-server.conf.d/sync/zoxide:/root/.local/share/zoxide:Z
+Volume=code-server_data.volume:/root/workspace:Z
 
 PublishPort=127.0.0.1:1040:8686
 
@@ -50,6 +56,12 @@ HealthRetries=3
 [Service]
 Restart=always
 RestartSec=10s
+ExecStartPre=mkdir -p %h/.config/containers/systemd/code-server.conf.d/sync/snippets
+ExecStartPre=touch %h/.config/containers/systemd/code-server.conf.d/sync/settings.json
+ExecStartPre=touch %h/.config/containers/systemd/code-server.conf.d/sync/keybindings.json
+ExecStartPre=touch %h/.config/containers/systemd/code-server.conf.d/sync/.zsh_history
+ExecStartPre=touch %h/.config/containers/systemd/code-server.conf.d/sync/.local.zsh
+ExecStartPre=mkdir -p %h/.config/containers/systemd/code-server.conf.d/sync/zoxide
 
 [Install]
 WantedBy=default.target

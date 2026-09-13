@@ -1,0 +1,40 @@
+[Unit]
+Description=RustDesk (hbbr) container service
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+Image=docker.io/rustdesk/rustdesk-server:latest
+
+ContainerName=rustdesk-hbbr
+
+Exec=hbbr
+
+StopTimeout=10
+
+EnvironmentFile=%h/.config/containers/systemd/rustdesk-hbbr.env
+
+Volume=rustdesk_data.volume:/root:z
+
+PublishPort=0.0.0.0:21117:21117
+#PublishPort=0.0.0.0:21119:21119
+
+PodmanArgs=--cpus=2
+PodmanArgs=--memory=1g
+PodmanArgs=--memory-reservation=32m
+
+LogDriver=journald
+
+; HealthCmd=curl -fsS http://127.0.0.1:9000/health
+; HealthStartPeriod=10s
+; HealthInterval=60s
+; HealthTimeout=5s
+; HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

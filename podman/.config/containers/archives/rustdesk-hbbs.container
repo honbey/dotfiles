@@ -1,0 +1,45 @@
+[Unit]
+Description=RustDesk (hbbs) container service
+
+After=rustdesk-hbbr.service
+Requires=rustdesk-hbbr.service
+
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Container]
+Image=docker.io/rustdesk/rustdesk-server:latest
+
+ContainerName=rustdesk-hbbs
+
+Exec=hbbs -r a.freewisdom.cn:21117
+
+StopTimeout=10
+
+EnvironmentFile=%h/.config/containers/systemd/rustdesk-hbbs.env
+
+Volume=rustdesk_data.volume:/root:z
+
+PublishPort=0.0.0.0:21115:21115
+PublishPort=0.0.0.0:21116:21116
+PublishPort=0.0.0.0:21116:21116/udp
+#PublishPort=0.0.0.0:21118:21118
+
+PodmanArgs=--cpus=2
+PodmanArgs=--memory=1g
+PodmanArgs=--memory-reservation=32m
+
+LogDriver=journald
+
+; HealthCmd=curl -fsS http://127.0.0.1:9000/health
+; HealthStartPeriod=10s
+; HealthInterval=60s
+; HealthTimeout=5s
+; HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target
