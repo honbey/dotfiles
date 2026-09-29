@@ -8,3 +8,7 @@
 !.local/bin/bg_run
 !.local/bin/new_container
 !.local/bin/install_brew
+!.local/bin/tests/
+!.local/bin/tests/README.md
+!.local/bin/tests/test_backup_home
+!.local/bin/tests/test_bg_run

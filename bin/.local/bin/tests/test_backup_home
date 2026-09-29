@@ -1,0 +1,603 @@
+#!/usr/bin/env bash
+# Regression tests for bin/.local/bin/backup_home: CLI parsing, the -g/-G
+# generators, refusal paths, full and incremental backups, 7z packaging, chain
+# restore (-x, point-in-time, split volumes, legacy archives) and output-dir
+# handling. Everything runs inside a disposable scratch tree with fake HOME
+# dirs, so the real home is never touched; a PATH shim answers 7z's password
+# prompts, which keeps the password out of argv.
+set -uo pipefail
+
+# Resolve the checkout from this file's own location, following symlinks so a
+# stow-linked copy (e.g. ~/.local/bin/tests/...) still finds the real script.
+SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")"
+REPO_ROOT="$(cd "$(dirname "${SELF}")/../../../.." && pwd)"
+SCRIPT="${BACKUP_HOME_SCRIPT:-${REPO_ROOT}/bin/.local/bin/backup_home}"
+ROOT="${BACKUP_HOME_TEST_DIR:-${TMPDIR:-/tmp}/backup_home-test}"
+KEEP=false
+PW="regress-pw"
+LOG="${ROOT}/logs"
+
+function usage() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Regression tests for backup_home, run against disposable HOME dirs under
+${ROOT}.
+
+Options:
+  -k, --keep   keep the scratch tree on success too (default: dropped on success)
+  -h, --help   show this help
+
+Environment:
+  BACKUP_HOME_SCRIPT     script under test (default: <repo>/bin/.local/bin/backup_home)
+  BACKUP_HOME_TEST_DIR   scratch tree (default: \${TMPDIR:-/tmp}/backup_home-test)
+
+Exit status: 0 all checks passed, 1 any check failed.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "${1}" in
+  -k | --keep) KEEP=true ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+  esac
+  shift
+done
+
+# The scratch tree is wiped up front and again on success, so never accept a
+# path that holds the script under test or a user directory.
+if [[ -z "${ROOT}" || "${ROOT}" == "/" || "${ROOT}" == "${HOME}" ]]; then
+  echo "refusing to use '${ROOT}' as scratch dir" >&2
+  exit 2
+fi
+case "${SCRIPT}" in
+"${ROOT}"/*)
+  echo "refusing: scratch dir ${ROOT} contains the script under test" >&2
+  exit 2
+  ;;
+esac
+if [[ ! -f "${SCRIPT}" ]]; then
+  echo "script under test not found: ${SCRIPT}" >&2
+  exit 2
+fi
+
+PASS=0
+FAIL=0
+FAILED=()
+
+pass() {
+  PASS=$((PASS + 1))
+  printf 'PASS  %s\n' "$1"
+}
+fail() {
+  FAIL=$((FAIL + 1))
+  FAILED+=("$1")
+  printf 'FAIL  %s\n' "$1"
+}
+sec() { printf '\n===== %s =====\n' "$1"; }
+
+# ------------------------------------------------------------------ drivers
+
+# 7z consumes the whole pipe buffer on its first prompt, so a multi-archive
+# restore cannot be driven by piping N lines (the second call reads a
+# mis-aligned password). Drive it through a PATH shim that rewrites the bare
+# "-p" prompt into "-p<pw>" instead; every other argument stays untouched.
+bh() { # bh <home> <args...> : run the script with the 7z shim in PATH
+  local home="$1"
+  shift
+  PATH="${SHIM}:${PATH}" HARNESS_PW="${PW}" SHIM_LOG_FILE="${SHIM_LOG}" HOME="${home}" "${SCRIPT}" "$@"
+}
+
+bh_log() { # bh_log <home> <logfile> <args...>
+  local home="$1" log="$2"
+  shift 2
+  PATH="${SHIM}:${PATH}" HARNESS_PW="${PW}" SHIM_LOG_FILE="${SHIM_LOG}" HOME="${home}" "${SCRIPT}" "$@" >"${log}" 2>&1
+}
+
+run_ok() {
+  local d="$1"
+  shift
+  if bh "$@" >/dev/null 2>&1; then pass "${d}"; else fail "${d} (exit != 0)"; fi
+}
+run_err() {
+  local d="$1"
+  shift
+  if bh "$@" >/dev/null 2>&1; then fail "${d} (expected non-zero exit)"; else pass "${d}"; fi
+}
+log_ok() {
+  local d="$1"
+  shift
+  if bh_log "$@" >/dev/null 2>&1; then pass "${d}"; else fail "${d} (exit != 0)"; fi
+}
+log_err() {
+  local d="$1"
+  shift
+  if bh_log "$@" >/dev/null 2>&1; then fail "${d} (expected non-zero exit)"; else pass "${d}"; fi
+}
+
+has() { if grep -qF -- "$3" "$2" 2>/dev/null; then pass "$1"; else fail "$1 (text '$3' not in $2)"; fi; }
+hasnt() { if grep -qF -- "$3" "$2" 2>/dev/null; then fail "$1 (text '$3' unexpectedly in $2)"; else pass "$1"; fi; }
+is_file() { if [[ -f "$2" || -d "$2" ]]; then pass "$1"; else fail "$1 (missing $2)"; fi; }
+no_file() { if [[ -e "$2" ]]; then fail "$1 ($2 unexpectedly exists)"; else pass "$1"; fi; }
+eq() { if [[ "$2" == "$3" ]]; then pass "$1"; else fail "$1 (got '$2', want '$3')"; fi; }
+
+expect_path() { # expect_path <desc> <member-list-file> <path> <present|absent>
+  local desc="$1" list="$2" path="$3" mode="$4"
+  if grep -qxF -- "${path}" "${list}" 2>/dev/null; then
+    [[ "${mode}" == present ]] && pass "${desc}" || fail "${desc} (unexpected member ${path})"
+  else
+    [[ "${mode}" == absent ]] && pass "${desc}" || fail "${desc} (missing member ${path})"
+  fi
+}
+
+expect_present() {
+  local prefix="$1" dir="$2"
+  shift 2
+  local p
+  for p in "$@"; do
+    if [[ -e "${dir}/${p}" ]]; then pass "${prefix}: ${p}"; else fail "${prefix}: ${p} missing"; fi
+  done
+}
+
+expect_absent() {
+  local prefix="$1" dir="$2"
+  shift 2
+  local p
+  for p in "$@"; do
+    if [[ -e "${dir}/${p}" ]]; then fail "${prefix}: ${p} should not exist"; else pass "${prefix}: ${p} absent"; fi
+  done
+}
+
+wfile() {
+  mkdir -p "$(dirname "$1")"
+  printf '%s\n' "$2" >"$1"
+}
+
+# --------------------------------------------------------------- fake $HOME
+
+build_home() {
+  local h="$1"
+  rm -rf "${h}"
+  local dirs=(
+    .ssh .vim/colors .config/nvim .local/share/nvim/site .local/state/nvim
+    .zsh .local/share/zinit .config/containers .config/ghostty .config/tmux
+    .local/share/zoxide .cargo/registry/cache .config/pip .gnupg .graveyard
+    .startup Downloads app/llama.cpp/llama.cpp/build data dotfiles kb
+    resources/models workspace/proj1/src workspace/proj1/target
+    workspace/proj1/dist workspace/proj1/node_modules/dep .cache .npm/pkg
+    .thumbnails .local/share/containers/storage .local/share/Trash/files
+  )
+  local d
+  for d in "${dirs[@]}"; do mkdir -p "${h}/${d}"; done
+
+  wfile "${h}/.env" "ENV=1"
+  wfile "${h}/.ssh/config" "Host *"
+  wfile "${h}/.ssh/id_ed25519" "KEY"
+  wfile "${h}/.gitconfig" "[user]"
+  wfile "${h}/.local.gitconfig" "[alias]"
+  wfile "${h}/.vimrc" "set nocompatible"
+  wfile "${h}/.vim/colors/x.vim" "hi"
+  wfile "${h}/.config/nvim/init.lua" "vim.g.x=1"
+  wfile "${h}/.local/share/nvim/site/a.txt" "a"
+  wfile "${h}/.local/state/nvim/state.txt" "s"
+  wfile "${h}/.zsh/.zshrc" "z"
+  wfile "${h}/.zsh_history" "h"
+  wfile "${h}/.zshenv" "e"
+  wfile "${h}/.zshrc" "r"
+  wfile "${h}/.local.zsh" "l"
+  wfile "${h}/.local/share/zinit/zinit.zsh" "zi"
+  wfile "${h}/.config/containers/storage.conf" "c"
+  wfile "${h}/.config/ghostty/config" "g"
+  wfile "${h}/.config/tmux/tmux.conf" "t"
+  wfile "${h}/.local/share/zoxide/data" "zx"
+  wfile "${h}/.cargo/config.toml" "car"
+  wfile "${h}/.npmrc" "npmrc"
+  wfile "${h}/.config/pip/pip.conf" "pip"
+  wfile "${h}/.sqliterc" "sql"
+  wfile "${h}/.stow-global-ignore" "stow"
+  wfile "${h}/.gnupg/pubring.kbx" "pk"
+  wfile "${h}/.graveyard/old.txt" "old"
+  ln "${h}/.graveyard/old.txt" "${h}/.graveyard/hard.txt"
+  wfile "${h}/.startup/app.conf" "st"
+  wfile "${h}/Downloads/file with spaces.txt" "sp"
+  wfile "${h}/app/data.txt" "appdata"
+  wfile "${h}/app/llama.cpp/llama.cpp/main.cpp" "main"
+  wfile "${h}/data/notes.md" "appdata2"
+  wfile "${h}/dotfiles/README.md" "df"
+  wfile "${h}/kb/notes.md" "note"
+  wfile "${h}/resources/notes.md" "res"
+  wfile "${h}/workspace/proj1/src/main.rs" "rs"
+  ln -s colors/x.vim "${h}/.vim/link.vim"
+  chmod 600 "${h}/.ssh/id_ed25519"
+  python3 -c 'import socket, sys; s = socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])' \
+    "${h}/.gnupg/S.gpg-agent"
+
+  wfile "${h}/.cargo/registry/cache/x.crate" "crate"
+  wfile "${h}/resources/models/big.bin" "big"
+  wfile "${h}/workspace/proj1/target/out.bin" "tgt"
+  wfile "${h}/workspace/proj1/dist/app.js" "dist"
+  wfile "${h}/workspace/proj1/node_modules/dep/index.js" "dep"
+  wfile "${h}/app/llama.cpp/llama.cpp/build/out.o" "bld"
+  wfile "${h}/.cache/huge.bin" "cache"
+  wfile "${h}/.npm/pkg/index.js" "npmpkg"
+  wfile "${h}/.thumbnails/t.png" "th"
+  wfile "${h}/.local/share/containers/storage/x" "cnt"
+  wfile "${h}/.local/share/Trash/files/t" "tr"
+}
+
+PRESENT=(
+  .backup_metadata .backup_excluded .env .ssh/config .ssh/id_ed25519
+  .gitconfig .local.gitconfig .vimrc .vim/colors/x.vim .vim/link.vim
+  .config/nvim/init.lua .local/share/nvim/site/a.txt .local/state/nvim/state.txt
+  .zsh/.zshrc .zsh_history .zshenv .zshrc .local.zsh .local/share/zinit/zinit.zsh
+  .config/containers/storage.conf .config/ghostty/config .config/tmux/tmux.conf
+  .local/share/zoxide/data .cargo/config.toml .npmrc .config/pip/pip.conf
+  .sqliterc .stow-global-ignore .gnupg/pubring.kbx .graveyard/old.txt
+  .graveyard/hard.txt .startup/app.conf "Downloads/file with spaces.txt"
+  app/data.txt app/llama.cpp/llama.cpp/main.cpp data/notes.md
+  dotfiles/README.md kb/notes.md resources/notes.md workspace/proj1/src/main.rs
+)
+
+ABSENT=(
+  .cargo/registry/cache/x.crate resources/models/big.bin
+  workspace/proj1/target/out.bin workspace/proj1/dist/app.js
+  workspace/proj1/node_modules/dep/index.js app/llama.cpp/llama.cpp/build/out.o
+  .gnupg/S.gpg-agent .cache/huge.bin .npm/pkg/index.js .thumbnails/t.png
+  .local/share/containers/storage/x .local/share/Trash/files/t
+)
+
+repack() { # repack <src7z> <dst7z> <prefix> <date> [nosnap]
+  local src="$1" dst="$2" prefix="$3" date="$4" skip_snap="${5:-}"
+  local tmp
+  tmp="$(mktemp -d)"
+  printf '%s\n' "${PW}" | 7z e -y -p"${PW}" -o"${tmp}" "${src}" >/dev/null 2>&1
+  local t s
+  t="$(find "${tmp}" -name '*.tar' | head -1)"
+  s="$(find "${tmp}" -name '*.snap' | head -1)"
+  mv "${t}" "${tmp}/${prefix}-${date}.tar"
+  local members=("${prefix}-${date}.tar")
+  if [[ -n "${s}" && -z "${skip_snap}" ]]; then
+    mv "${s}" "${tmp}/${prefix}-${date}.snap"
+    members+=("${prefix}-${date}.snap")
+  fi
+  rm -f "${dst}"
+  (cd "${tmp}" && 7z a -t7z -mhe=on -p"${PW}" -mx=1 "${dst}" "${members[@]}" >/dev/null 2>&1)
+  rm -rf "${tmp}"
+}
+
+# ------------------------------------------------------------------- setup
+
+rm -rf "${ROOT}"
+mkdir -p "${LOG}"
+command -v 7z >/dev/null || {
+  echo "7z missing"
+  exit 2
+}
+USER_NAME="$(id -un)"
+TODAY="$(date +%Y%m%d)"
+
+EMPTY="${ROOT}/home_empty"
+GEN="${ROOT}/home_gen"
+METASONLY="${ROOT}/home_metaonly"
+MINIMAL="${ROOT}/home_minimal"
+mkdir -p "${EMPTY}" "${GEN}" "${METASONLY}" "${MINIMAL}"
+
+SHIM="${ROOT}/shim"
+SHIM_LOG="${ROOT}/shim_prompts.log"
+REAL7Z="$(command -v 7z)"
+mkdir -p "${SHIM}"
+{
+  printf '%s\n' '#!/usr/bin/env bash' "REAL7Z=\"${REAL7Z}\""
+} >"${SHIM}/7z"
+cat >>"${SHIM}/7z" <<'EOF'
+args=()
+have_p=0
+for a in "$@"; do
+  if [[ "${a}" == "-p" ]]; then
+    args+=("-p${HARNESS_PW}")
+    have_p=1
+    echo prompt >>"${SHIM_LOG_FILE}"
+  else
+    args+=("${a}")
+    [[ "${a}" == -p* ]] && have_p=1
+  fi
+done
+# Extraction carries no -p at all (the script relies on 7z prompting), so
+# answer that prompt too; the password is ignored for plain archives.
+if [[ "${have_p}" -eq 0 ]]; then
+  args+=("-p${HARNESS_PW}")
+  echo implicit >>"${SHIM_LOG_FILE}"
+fi
+exec "${REAL7Z}" "${args[@]}"
+EOF
+chmod +x "${SHIM}/7z"
+ln -sf 7z "${SHIM}/7zz"
+
+############################################################ group 1: CLI
+sec "group 1: CLI / argument parsing"
+
+"${SCRIPT}" -h >"${LOG}/help.txt" 2>&1
+eq "-h exits 0" "$?" "0"
+has "-h prints restore section" "${LOG}/help.txt" "Restore (-x)"
+has "-h prints -x option" "${LOG}/help.txt" "--extract"
+has "-h prints -r option" "${LOG}/help.txt" "--restore-dir"
+has "-h prints -d option" "${LOG}/help.txt" "--date"
+"${SCRIPT}" --help >/dev/null 2>&1
+eq "--help exits 0" "$?" "0"
+"${SCRIPT}" -Z >/dev/null 2>&1
+eq "unknown short option exits 1" "$?" "1"
+"${SCRIPT}" --nope >/dev/null 2>&1
+eq "unknown long option exits 1" "$?" "1"
+HOME="${EMPTY}" "${SCRIPT}" -l 10 -o "${ROOT}/never" >/dev/null 2>&1
+eq "-l 10 rejected" "$?" "1"
+HOME="${EMPTY}" "${SCRIPT}" -l abc -o "${ROOT}/never" >/dev/null 2>&1
+eq "-l abc rejected" "$?" "1"
+HOME="${EMPTY}" "${SCRIPT}" --mx-level=9 --split-size=4x -o "${ROOT}/never" >/dev/null 2>&1
+eq "--split-size 4x rejected" "$?" "1"
+HOME="${EMPTY}" "${SCRIPT}" -s 0g -o "${ROOT}/never" >/dev/null 2>&1
+eq "-s 0g rejected" "$?" "1"
+HOME="${EMPTY}" "${SCRIPT}" -x -d 2026-01-01 -o "${ROOT}/never" >/dev/null 2>&1
+eq "-x with malformed --date rejected" "$?" "1"
+HOME="${EMPTY}" "${SCRIPT}" -x -F -o "${ROOT}/never" >/dev/null 2>&1
+eq "-x combined with -F rejected" "$?" "1"
+no_file "rejected runs wrote nothing" "${ROOT}/never"
+
+################################################### group 2: generators
+sec "group 2: -g / -G generators"
+run_ok "-g generates ~/.backup_excluded" "${GEN}" -g
+has ".backup_excluded has .cache" "${GEN}/.backup_excluded" ".cache"
+has ".backup_excluded has socket pattern" "${GEN}/.backup_excluded" "*.sock"
+has ".backup_excluded has node_modules" "${GEN}/.backup_excluded" "workspace/*/node_modules"
+hasnt ".backup_excluded has no comment lines" "${GEN}/.backup_excluded" "#"
+run_err "-g refuses to overwrite" "${GEN}" -g
+if [[ "$(id -u)" -eq 0 ]]; then
+  run_ok "-G generates ~/.backup_metadata" "${GEN}" -G
+  has ".backup_metadata has machine id line" "${GEN}/.backup_metadata" "/etc/machine-id:"
+  has ".backup_metadata has user line" "${GEN}/.backup_metadata" "user: "
+  run_err "-G refuses to overwrite" "${GEN}" -G
+fi
+
+################################################# group 3: preconditions
+sec "group 3: preconditions / refusal paths"
+run_ok "seed metadata for home_metaonly" "${METASONLY}" -G
+run_ok "seed metadata for home_minimal" "${MINIMAL}" -G
+run_ok "seed excluded for home_minimal" "${MINIMAL}" -g
+
+log_err "missing .backup_metadata rejected" "${EMPTY}" "${LOG}/no_meta.txt" -F -o "${ROOT}/o_nometa"
+has "missing metadata message" "${LOG}/no_meta.txt" "missing"
+has "missing metadata hints -G" "${LOG}/no_meta.txt" "-G"
+no_file "missing metadata run wrote no archive" "${ROOT}/o_nometa"
+log_err "missing .backup_excluded rejected" "${METASONLY}" "${LOG}/no_excl.txt" -F -o "${ROOT}/o_noexcl"
+has "missing excluded message" "${LOG}/no_excl.txt" "run with -g first"
+# .backup_metadata/.backup_excluded are themselves entries in TAR_PATHS, so a
+# home holding only those two files is the smallest successful run: the
+# "nothing to back up" guard is unreachable by construction.
+log_ok "helper-files-only home still backs up" "${MINIMAL}" "${LOG}/minimal.txt" -F -o "${ROOT}/o_minimal"
+tar tf "${ROOT}/o_minimal/"*.tar >"${LOG}/tar_minimal.txt" 2>&1
+eq "helper-only home archives exactly 2 files" "$(wc -l <"${LOG}/tar_minimal.txt" | tr -d ' ')" "2"
+
+######################################### group 4: full backup + contents
+sec "group 4: first full backup (-F) and archive contents"
+HF="${ROOT}/home_full"
+OF="${ROOT}/out_full"
+KEEP0="${ROOT}/keep0"
+KEEP1="${ROOT}/keep1"
+CHAIN="${ROOT}/chain"
+mkdir -p "${OF}" "${KEEP0}" "${KEEP1}" "${CHAIN}"
+build_home "${HF}"
+run_ok "seed metadata" "${HF}" -G
+run_ok "seed excluded" "${HF}" -g
+log_ok "-F full backup succeeds" "${HF}" "${LOG}/full.txt" -F -o "${OF}"
+has "full backup reports packing" "${LOG}/full.txt" "Packing home directory"
+has "full backup reports completion" "${LOG}/full.txt" "backup done"
+MID="$(awk -F': ' '/\/etc\/machine-id:/{print $2}' "${HF}/.backup_metadata" | cut -c1-8)"
+PREFIX="home_${USER_NAME}-${MID}"
+BASE="${PREFIX}-${TODAY}"
+TAR="${OF}/${BASE}.tar"
+SEV="${OF}/${BASE}.7z"
+SNAP="${OF}/${PREFIX}.snap"
+SNAPCOPY="${OF}/${BASE}.snap"
+is_file "raw tar kept" "${TAR}"
+is_file "7z archive created" "${SEV}"
+is_file "live snapshot created" "${SNAP}"
+is_file "dated snapshot copy created" "${SNAPCOPY}"
+
+tar tf "${TAR}" >"${LOG}/tar_full.txt" 2>"${LOG}/tar_full.err"
+eq "tar listing is warning-free" "$(wc -c <"${LOG}/tar_full.err" | tr -d ' ')" "0"
+for p in "${PRESENT[@]}"; do expect_path "full tar has ${p}" "${LOG}/tar_full.txt" "${p}" present; done
+for p in "${ABSENT[@]}"; do expect_path "full tar excludes ${p}" "${LOG}/tar_full.txt" "${p}" absent; done
+hasnt "socket excluded by pattern" "${LOG}/tar_full.txt" "S.gpg-agent"
+
+if 7z l "${SEV}" >/dev/null 2>&1; then fail "7z headers encrypted (bare list must fail)"; else pass "7z headers encrypted (bare list must fail)"; fi
+printf '%s\n' "${PW}" | 7z l -ba -p"${PW}" "${SEV}" >"${LOG}/sev_list.txt" 2>&1
+eq "7z holds exactly tar + snap" "$(awk 'NF{print $NF}' "${LOG}/sev_list.txt" | wc -l | tr -d ' ')" "2"
+has "7z holds the tar" "${LOG}/sev_list.txt" "${BASE}.tar"
+has "7z holds the dated snap copy" "${LOG}/sev_list.txt" "${BASE}.snap"
+has "creation uses the bare -p prompt (no password in argv)" "${SHIM_LOG}" "prompt"
+
+######################################### group 5: incremental + chain
+sec "group 5: incremental run, chain restore, point-in-time"
+mv "${TAR}" "${SEV}" "${SNAPCOPY}" "${KEEP0}/"
+wfile "${HF}/kb/new.md" "new"
+wfile "${HF}/kb/sub/deep.md" "deep"
+wfile "${HF}/workspace/proj1/src/main.rs" "changed"
+wfile "${HF}/resources/notes.md" "changed"
+rm "${HF}/kb/notes.md"
+log_ok "incremental backup succeeds" "${HF}" "${LOG}/incr.txt" -o "${OF}"
+has "incremental run reports completion" "${LOG}/incr.txt" "backup done"
+is_file "incremental tar written" "${TAR}"
+is_file "incremental snap copy written" "${SNAPCOPY}"
+tar tf "${TAR}" >"${LOG}/tar_incr.txt" 2>"${LOG}/tar_incr.err"
+eq "incremental tar listing warning-free" "$(wc -c <"${LOG}/tar_incr.err" | tr -d ' ')" "0"
+for p in kb/new.md kb/sub/deep.md workspace/proj1/src/main.rs resources/notes.md; do
+  expect_path "incremental tar has ${p}" "${LOG}/tar_incr.txt" "${p}" present
+done
+for p in kb/notes.md .vimrc .ssh/config .gitconfig; do
+  expect_path "incremental tar skips ${p}" "${LOG}/tar_incr.txt" "${p}" absent
+done
+if [[ "$(stat -c %s "${TAR}")" -lt "$(stat -c %s "${KEEP0}/${BASE}.tar")" ]]; then
+  pass "incremental tar is smaller than the full tar"
+else
+  fail "incremental tar is smaller than the full tar"
+fi
+mv "${TAR}" "${SEV}" "${SNAPCOPY}" "${KEEP1}/"
+
+repack "${KEEP0}/${BASE}.7z" "${CHAIN}/${PREFIX}-20260101.7z" "${PREFIX}" 20260101
+repack "${KEEP1}/${BASE}.7z" "${CHAIN}/${PREFIX}-20260102.7z" "${PREFIX}" 20260102
+
+PRESENT_MUTATED=()
+for p in "${PRESENT[@]}"; do
+  [[ "${p}" == "kb/notes.md" ]] && continue
+  PRESENT_MUTATED+=("${p}")
+done
+
+RF="${ROOT}/restore_full"
+log_ok "-x restores the newest chain" "${HF}" "${LOG}/restore_full.txt" -x -o "${CHAIN}" -r "${RF}"
+has "-x reports how many archives" "${LOG}/restore_full.txt" "restoring 2 archive(s)"
+for p in "${PRESENT_MUTATED[@]}"; do expect_present "restored" "${RF}/home" "${p}"; done
+for p in "${ABSENT[@]}"; do expect_absent "restored" "${RF}/home" "${p}"; done
+expect_present "restored" "${RF}/home" kb/new.md kb/sub/deep.md
+expect_absent "restored" "${RF}/home" kb/notes.md
+eq "restored keeps 600 mode" "$(stat -c %a "${RF}/home/.ssh/id_ed25519")" "600"
+[[ -L "${RF}/home/.vim/link.vim" ]] && pass "symlink restored as symlink" || fail "symlink restored as symlink"
+eq "hardlink restored as hardlink" "$(stat -c %h "${RF}/home/.graveyard/old.txt")" "2"
+eq "hardlink shares the inode" \
+  "$(stat -c %i "${RF}/home/.graveyard/old.txt")" "$(stat -c %i "${RF}/home/.graveyard/hard.txt")"
+eq "tars/ keeps both tars" "$(find "${RF}/tars" -name '*.tar' | wc -l | tr -d ' ')" "2"
+eq "tars/ keeps both snap copies" "$(find "${RF}/tars" -name '*.snap' | wc -l | tr -d ' ')" "2"
+
+RP="${ROOT}/restore_pit"
+log_ok "-x -d restores a point in time" "${HF}" "${LOG}/restore_pit.txt" -x -o "${CHAIN}" -d 20260101 -r "${RP}"
+for p in "${PRESENT[@]}"; do expect_present "pit" "${RP}/home" "${p}"; done
+expect_present "pit" "${RP}/home" kb/notes.md
+expect_absent "pit" "${RP}/home" kb/new.md kb/sub/deep.md
+
+run_err "-x refuses a populated target" "${HF}" -x -o "${CHAIN}" -r "${RF}"
+log_err "-x rejects --date older than the chain" "${HF}" "${LOG}/pit_old.txt" -x -o "${CHAIN}" -d 20200101
+has "old-date message" "${LOG}/pit_old.txt" "no archive at or before"
+ESRC="${ROOT}/empty_src"
+mkdir -p "${ESRC}"
+log_err "-x on an archive-less dir fails" "${HF}" "${LOG}/no_src.txt" -x -o "${ESRC}"
+has "archive-less message" "${LOG}/no_src.txt" "no archive"
+
+# legacy tar-only archive (created before snapshots were packaged)
+OLD="${ROOT}/oldfmt"
+mkdir -p "${OLD}"
+repack "${KEEP0}/${BASE}.7z" "${OLD}/${PREFIX}-20260101.7z" "${PREFIX}" 20260101 nosnap
+RO="${ROOT}/restore_old"
+log_ok "-x restores a tar-only (legacy) archive" "${HF}" "${LOG}/restore_old.txt" -x -o "${OLD}" -r "${RO}"
+diff -r "${RO}/home" "${RP}/home" >/dev/null 2>&1 &&
+  pass "legacy (tar-only) archive restores the same tree as the level-0 run" ||
+  fail "legacy (tar-only) archive restores the same tree as the level-0 run"
+log_ok "-x default restore dir is <src>/restore_<date>" "${HF}" "${LOG}/restore_default.txt" -x -o "${OLD}"
+is_file "default restore dir created" "${OLD}/restore_20260101/home"
+
+# chain prefix containing '-' must still parse
+DASH="${ROOT}/dash"
+mkdir -p "${DASH}"
+repack "${KEEP0}/${BASE}.7z" "${DASH}/home_my-user-abc12345-20260101.7z" "home_my-user-abc12345" 20260101
+RD="${ROOT}/restore_dash"
+log_ok "-x parses a prefix containing '-'" "${HF}" "${LOG}/restore_dash.txt" -x -o "${DASH}" -r "${RD}"
+diff -r "${RD}/home" "${RP}/home" >/dev/null 2>&1 &&
+  pass "prefix with '-' restores the same tree as the standard prefix" ||
+  fail "prefix with '-' restores the same tree as the standard prefix"
+
+# -C parks newer chains in <output-dir>/<date>/ -> hint must show up
+HINT="${ROOT}/hint"
+mkdir -p "${HINT}/20260103"
+cp "${OLD}/${PREFIX}-20260101.7z" "${HINT}/"
+cp "${OLD}/${PREFIX}-20260101.7z" "${HINT}/20260103/"
+log_ok "-x from a dir whose subdir holds archives" "${HF}" "${LOG}/restore_hint.txt" -x -o "${HINT}" -r "${ROOT}/restore_hint"
+has "hint about the dated subdir" "${LOG}/restore_hint.txt" "also holds archives"
+
+# -x must work on a machine without ~/.backup_metadata
+RNM="${ROOT}/restore_nometa"
+log_ok "-x works without ~/.backup_metadata" "${EMPTY}" "${LOG}/restore_nometa.txt" -x -o "${CHAIN}" -r "${RNM}"
+is_file "metadata-less restore produced a tree" "${RNM}/home/.zshrc"
+
+########################################### group 6: split / volumes
+sec "group 6: split archives (-s) and restore"
+HS="${ROOT}/home_split"
+OS="${ROOT}/out_split"
+mkdir -p "${OS}"
+build_home "${HS}"
+run_ok "seed metadata" "${HS}" -G
+run_ok "seed excluded" "${HS}" -g
+log_ok "-s 1k split backup succeeds" "${HS}" "${LOG}/split.txt" -F -o "${OS}" -s 1k
+has "split reports volume count" "${LOG}/split.txt" "volumes)"
+is_file "first volume exists" "${OS}/${BASE}.7z.001"
+is_file "second volume exists" "${OS}/${BASE}.7z.002"
+no_file "no unsplit .7z in split mode" "${OS}/${BASE}.7z"
+eq "volume count matches info line" \
+  "$(ls "${OS}/${BASE}.7z".0* 2>/dev/null | wc -l | tr -d ' ')" \
+  "$(grep -o '(+ [0-9]* volumes)' "${LOG}/split.txt" | grep -o '[0-9]*')"
+RS="${ROOT}/restore_split"
+log_ok "-x restores a split chain" "${HS}" "${LOG}/restore_split.txt" -x -o "${OS}" -r "${RS}"
+for p in "${PRESENT[@]}"; do expect_present "split-restored" "${RS}/home" "${p}"; done
+for p in "${ABSENT[@]}"; do expect_absent "split-restored" "${RS}/home" "${p}"; done
+
+########################################### group 7: output dir variants
+sec "group 7: output dir handling, force-full, same-day rerun"
+HV="${ROOT}/home_variants"
+build_home "${HV}"
+run_ok "seed metadata" "${HV}" -G
+run_ok "seed excluded" "${HV}" -g
+run_ok "-o creates nested dirs" "${HV}" -F -o "${ROOT}/deep/a/b/c" -l 0
+is_file "nested -o used" "${ROOT}/deep/a/b/c/${BASE}.7z"
+run_ok "--output-dir with a space works" "${HV}" -F -o "${ROOT}/out space" -l 0
+is_file "space dir used" "${ROOT}/out space/${BASE}.7z"
+run_ok "--output-dir=<dir> form works" "${HV}" -F --output-dir="${ROOT}/out_eq" -l 0
+is_file "--output-dir= used" "${ROOT}/out_eq/${BASE}.7z"
+run_ok "--mx-level 0 (space form) works" "${HV}" -F -o "${ROOT}/out_mx0" --mx-level 0
+run_ok "tilde output dir expands" "${HV}" -F -o '~/binout' -l 0
+is_file "tilde expanded under \$HOME" "${HV}/binout/${BASE}.7z"
+(cd / && PATH="${SHIM}:${PATH}" HARNESS_PW="${PW}" SHIM_LOG_FILE="${SHIM_LOG}" \
+  HOME="${HV}" "${SCRIPT}" -F -o "${ROOT}/out_cwd" -l 0 >/dev/null 2>&1)
+eq "runs from a foreign cwd" "$?" "0"
+is_file "foreign cwd produced an archive" "${ROOT}/out_cwd/${BASE}.7z"
+
+SP="${ROOT}/home_sparse"
+mkdir -p "${SP}"
+run_ok "seed metadata for sparse home" "${SP}" -G
+run_ok "seed excluded for sparse home" "${SP}" -g
+wfile "${SP}/.zshrc" "r"
+log_ok "sparse home still backs up" "${SP}" "${LOG}/sparse.txt" -F -o "${ROOT}/out_sparse"
+has "sparse home warns about missing paths" "${LOG}/sparse.txt" "skipping missing path"
+is_file "sparse archive created" "${ROOT}/out_sparse/${BASE}.7z"
+
+OC="${ROOT}/out_forcefull"
+run_ok "-C builds the first chain" "${HV}" -F -o "${OC}" -l 0
+log_ok "-C with an existing chain succeeds" "${HV}" "${LOG}/forcefull.txt" -C -o "${OC}" -l 0
+has "-C reports the new dated dir" "${LOG}/forcefull.txt" "writing new full backup to"
+is_file "-C wrote into <date>/ subdir" "${OC}/${TODAY}/${BASE}.7z"
+log_err "-F refuses when a snapshot exists" "${HV}" "${LOG}/f_twice.txt" -F -o "${OC}"
+has "-F twice message" "${LOG}/f_twice.txt" "already exists"
+
+ORR="${ROOT}/out_rerun"
+run_ok "same-day: first full" "${HV}" -F -o "${ORR}" -l 0
+log_ok "same-day: incremental rerun succeeds" "${HV}" "${LOG}/rerun.txt" -o "${ORR}" -l 0
+has "same-day rerun warns about overwrite" "${LOG}/rerun.txt" "same-day rerun overwrites it"
+run_err "incremental without a snapshot rejected" "${HV}" -o "${ROOT}/out_nosnap"
+
+############################################################### summary
+printf '\n===== summary =====\n'
+printf 'pass: %d\nfail: %d\n' "${PASS}" "${FAIL}"
+if [[ ${FAIL} -gt 0 ]]; then
+  printf 'failed checks:\n'
+  printf '  %s\n' "${FAILED[@]}"
+  printf 'scratch tree kept for inspection: %s\n' "${ROOT}"
+  exit 1
+fi
+if ${KEEP}; then
+  printf 'scratch tree kept: %s\n' "${ROOT}"
+else
+  rm -rf "${ROOT}"
+fi
+exit 0

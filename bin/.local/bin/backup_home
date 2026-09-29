@@ -27,13 +27,18 @@ Output file names:
   home_<user>-<machine-id8>-<date>.tar   (raw tar archive)
   home_<user>-<machine-id8>-<date>.7z    (encrypted 7z archive, or .7z.001/.002/... when split)
   home_<user>-<machine-id8>.snap         (snapshot, updated each run)
-  home_<user>-<machine-id8>-<date>.snap  (snapshot copy for restore)
+  home_<user>-<machine-id8>-<date>.snap  (snapshot copy, packed into the .7z)
 
 Options:
   -F, --first-run           Initial full backup (creates the snapshot)
   -C, --force-full          Force a fresh full backup; if the output dir already
                             holds backups, start a new chain in a <date> subdir
-  -o DIR, --output-dir DIR  Output directory (default: .)
+  -x, --extract             Restore mode: decrypt the chain found in the output
+                            dir and untar it oldest first (see Restore below)
+  -r DIR, --restore-dir DIR Restore target dir (default: <output-dir>/restore_<date>)
+  -d DATE, --date DATE      Restore only archives up to DATE, YYYYMMDD
+                            (default: newest archive found)
+  -o DIR, --output-dir DIR  Output directory (default: .); archive source in -x mode
   -l N, --mx-level N        7z compression level 0-9 (default: 1)
   -s SIZE, --split-size SIZE
                             7z volume size with unit b/k/m/g (e.g. 4g, 512m);
@@ -44,9 +49,16 @@ Options:
 
 Requires 7zz or 7z on PATH. Run from the home directory.
 
-Restore (in order, oldest first; extract each .7z first):
-  tar --listed-incremental=<date>.snap -xf <date>.tar
-  # split archive: 7zz x <date>.7z.001  (reads all volumes)
+Restore (-x): decrypts home_<user>-<machine-id8>-<date>.7z (.7z.001 when split)
+from the output dir, oldest first, then untars each one with GNU tar's
+--listed-incremental=/dev/null. 7z prompts for the password per archive. The
+target tree must be empty: every level restores a directory's state as of its
+date and deletes files that were absent then.
+  <restore-dir>/tars/   per-date .tar (+ .snap copy) kept for inspection
+  <restore-dir>/home/   restored home tree
+Manual equivalent, oldest level first:
+  7zz e -o<tars> home_<user>-<machine-id8>-<date>.7z
+  tar --listed-incremental=/dev/null -xpf <tars>/<date>.tar -C <empty-dir>
 
 Examples:
   $(basename "$0") -F                      # first full backup
@@ -54,6 +66,8 @@ Examples:
   $(basename "$0") -o /backup -l 5         # output dir + mx level 5
   $(basename "$0") -s 4g                   # split into 4G volumes
   $(basename "$0") -C -o /backup           # force a new full backup chain
+  $(basename "$0") -x -o /backup           # restore newest chain from /backup
+  $(basename "$0") -x -o /backup -d 20260101 -r ~/restore_0101
 EOF
 }
 
@@ -62,10 +76,14 @@ MX_LEVEL=1
 FIRST_RUN=false
 FORCE_FULL=false
 SPLIT_SIZE=""
+EXTRACT=false
+RESTORE_DIR=""
+RESTORE_DATE=""
 GEN_EXCLUDED=false
 GEN_METADATA=false
 
-# Paths to back up, relative to $HOME (one per line, easy to extend)
+# Paths to back up, relative to $HOME (whitespace-separated; quote an entry
+# that contains spaces)
 TAR_PATHS=(
   .backup_excluded .backup_metadata
   .env .ssh .sqliterc .startup .stow-global-ignore .gnupg .graveyard
@@ -90,6 +108,11 @@ for arg in "$@"; do
   --force-full) args+=(-C) ;;
   --generate-excluded) args+=(-g) ;;
   --generate-metadata) args+=(-G) ;;
+  --extract) args+=(-x) ;;
+  --restore-dir=*) args+=(-r "${arg#*=}") ;;
+  --restore-dir) args+=(-r) ;;
+  --date=*) args+=(-d "${arg#*=}") ;;
+  --date) args+=(-d) ;;
   --output-dir=*) args+=(-o "${arg#*=}") ;;
   --output-dir) args+=(-o) ;;
   --mx-level=*) args+=(-l "${arg#*=}") ;;
@@ -106,7 +129,7 @@ else
   set --
 fi
 
-while getopts "ho:l:Fs:gGC" opt; do
+while getopts "ho:l:Fs:gGCxr:d:" opt; do
   case "${opt}" in
   h)
     usage
@@ -116,6 +139,9 @@ while getopts "ho:l:Fs:gGC" opt; do
   C) FORCE_FULL=true ;;
   g) GEN_EXCLUDED=true ;;
   G) GEN_METADATA=true ;;
+  x) EXTRACT=true ;;
+  r) RESTORE_DIR="${OPTARG}" ;;
+  d) RESTORE_DATE="${OPTARG}" ;;
   o) OUT_DIR="${OPTARG}" ;;
   l) MX_LEVEL="${OPTARG}" ;;
   s) SPLIT_SIZE="${OPTARG}" ;;
@@ -134,6 +160,17 @@ fi
 if [[ -n "${SPLIT_SIZE}" ]] && ! [[ "${SPLIT_SIZE}" =~ ^[1-9][0-9]*[bkmg]?$ ]]; then
   err "invalid --split-size: ${SPLIT_SIZE} (expected e.g. 4g, 512m, 1k)"
   exit 1
+fi
+
+if ${EXTRACT}; then
+  if ${FIRST_RUN} || ${FORCE_FULL}; then
+    err "--first-run/--force-full are backup-only options; drop them in --extract mode"
+    exit 1
+  fi
+  if [[ -n "${RESTORE_DATE}" ]] && ! [[ "${RESTORE_DATE}" =~ ^[0-9]{8}$ ]]; then
+    err "invalid --date: ${RESTORE_DATE} (expected YYYYMMDD)"
+    exit 1
+  fi
 fi
 
 # ---------- auxiliary modes (generate helper files, then exit) ----------
@@ -211,6 +248,115 @@ function generate_metadata() {
   info "generated ${target}"
 }
 
+# ---------- restore mode (decrypt + untar an incremental chain) ----------
+
+# Date component of home_<user>-<machine-id8>-<date>.7z[.001].
+# Anchored on the fixed-width tail instead of counting '-' separators, so a
+# user name or machine id containing '-' does not shift the fields.
+function archive_date() {
+  local name="${1##*/}"
+  if [[ "${name}" =~ -([0-9]{8})\.7z(\.001)?$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+  fi
+}
+
+# Chain prefix home_<user>-<machine-id8>: everything before the trailing -<date>.
+function archive_prefix() {
+  local name="${1##*/}"
+  if [[ "${name}" =~ ^(.+)-[0-9]{8}\.7z(\.001)?$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+  fi
+}
+
+function do_extract() {
+  local source_dir="${1}" restore_dir="${2}" until_date="${3}"
+  local archives=() f d
+
+  for f in "${source_dir}"/home_*-*.7z "${source_dir}"/home_*-*.7z.001; do
+    if [[ -f "${f}" ]] && [[ -n "$(archive_date "${f}")" ]]; then
+      archives+=("${f}")
+    fi
+  done
+  if [[ ${#archives[@]} -eq 0 ]]; then
+    err "no archive (home_<user>-<machine-id8>-<date>.7z or .7z.001) found in ${source_dir}"
+    exit 1
+  fi
+
+  # -C parks a fresh chain under <output-dir>/<date>/; restoring from the top
+  # level would silently pick the older chain, so point it out.
+  local sub
+  for sub in "${source_dir}"/*/; do
+    if [[ -d "${sub}" ]] && compgen -G "${sub}home_*-*.7z*" >/dev/null; then
+      warn "$(basename "${sub%/}")/ also holds archives; pass -o ${sub%/} to restore from there"
+    fi
+  done
+
+  # The newest archive picks the chain; archives of other users/machines
+  # (different prefix) are ignored.
+  local newest_date="" newest_file=""
+  for f in "${archives[@]}"; do
+    d="$(archive_date "${f}")"
+    if [[ -z "${newest_date}" || "${d}" > "${newest_date}" ]]; then
+      newest_date="${d}"
+      newest_file="${f}"
+    fi
+  done
+  local prefix
+  prefix="$(archive_prefix "${newest_file}")"
+
+  declare -A chain=()
+  for f in "${archives[@]}"; do
+    if [[ "$(archive_prefix "${f}")" == "${prefix}" ]]; then
+      chain["$(archive_date "${f}")"]="${f}"
+    fi
+  done
+
+  local dates=()
+  mapfile -t dates < <(printf '%s\n' "${!chain[@]}" | sort)
+
+  local cutoff="${until_date:-${dates[${#dates[@]} - 1]}}"
+  local levels=()
+  for d in "${dates[@]}"; do
+    if [[ "${d}" > "${cutoff}" ]]; then
+      continue
+    fi
+    levels+=("${d}")
+  done
+  if [[ ${#levels[@]} -eq 0 ]]; then
+    err "no archive at or before ${cutoff} (chain holds ${dates[0]}..${dates[${#dates[@]} - 1]})"
+    exit 1
+  fi
+
+  local head_date="${levels[${#levels[@]} - 1]}"
+  local target="${restore_dir:-${source_dir}/restore_${head_date}}"
+  local tars_dir="${target}/tars"
+  local home_dir="${target}/home"
+  mkdir -p "${tars_dir}" "${home_dir}"
+
+  # Each level rewrites a directory to its state as of that date and deletes
+  # files that were absent then, so restoring into a populated tree loses them.
+  if [[ -n "$(ls -A "${home_dir}")" ]]; then
+    err "restore target ${home_dir} is not empty; move it away or pick another --restore-dir"
+    exit 1
+  fi
+
+  info "restoring ${#levels[@]} archive(s) of ${prefix} up to ${head_date}"
+  local tarball
+  for d in "${levels[@]}"; do
+    f="${chain[${d}]}"
+    step "decrypting $(basename "${f}")"
+    "${SEVENZIP}" e -y -o"${tars_dir}" "${f}"
+    tarball="${tars_dir}/${prefix}-${d}.tar"
+    if [[ ! -f "${tarball}" ]]; then
+      err "no ${prefix}-${d}.tar inside ${f}; ${home_dir} holds a partial restore"
+      exit 1
+    fi
+    step "untarring $(basename "${tarball}")"
+    tar --listed-incremental=/dev/null -xpf "${tarball}" -C "${home_dir}"
+  done
+  info "restore done: ${home_dir} (unpacked archives kept in ${tars_dir})"
+}
+
 if ${GEN_EXCLUDED}; then
   generate_excluded
   exit 0
@@ -221,7 +367,6 @@ if ${GEN_METADATA}; then
 fi
 
 OUT_DIR="${OUT_DIR/#\~/$HOME}"
-mkdir -p "${OUT_DIR}"
 
 # Prefer 7zz, fall back to 7z; abort early if neither is available.
 SEVENZIP=""
@@ -232,6 +377,12 @@ elif command -v 7z >/dev/null 2>&1; then
 else
   err "neither 7zz nor 7z found on PATH; install p7zip first"
   exit 1
+fi
+
+# Restore mode: no ~/.backup_metadata needed, the chain is read from file names.
+if ${EXTRACT}; then
+  do_extract "${OUT_DIR}" "${RESTORE_DIR/#\~/$HOME}" "${RESTORE_DATE}"
+  exit 0
 fi
 
 # machine id: first 8 chars of the /etc/machine-id line in ~/.backup_metadata.
@@ -261,6 +412,9 @@ if ${FORCE_FULL}; then
     info "existing backups found; writing new full backup to ${OUT_DIR}"
   fi
 fi
+
+# Created only now: a run that fails its pre-checks should not leave a dir behind.
+mkdir -p "${OUT_DIR}"
 
 BASE="home_${USER_NAME}-${MACHINE_ID}-${DATE}"
 TAR_FILE="${OUT_DIR}/${BASE}.tar"
@@ -309,7 +463,8 @@ for p in "${TAR_PATHS[@]}"; do
   fi
 done
 
-# Without this guard tar would receive no path operands and back up all of $HOME.
+# Without this guard tar would abort with "Cowardly refusing to create an
+# empty archive".
 if [[ ${#VALID_PATHS[@]} -eq 0 ]]; then
   err "none of the configured paths exist under ${HOME}; nothing to back up"
   exit 1
@@ -324,11 +479,11 @@ tar cf "${TAR_FILE}" \
 # Keep a snapshot copy next to the archive so it can be restored later.
 cp "${SNAP}" "${SNAP_COPY}"
 
-step "Compressing ${TAR_FILE} to ${SEVENZIP_FILE} (mx=${MX_LEVEL}${SPLIT_SIZE:+, split ${SPLIT_SIZE}})"
+step "Compressing ${TAR_FILE} and ${SNAP_COPY} to ${SEVENZIP_FILE} (mx=${MX_LEVEL}${SPLIT_SIZE:+, split ${SPLIT_SIZE}})"
 if [[ -n "${SPLIT_SIZE}" ]]; then
-  "${SEVENZIP}" a -t7z -mhe=on -p -mx="${MX_LEVEL}" -v"${SPLIT_SIZE}" "${SEVENZIP_FILE}" "${TAR_FILE}"
+  "${SEVENZIP}" a -t7z -mhe=on -p -mx="${MX_LEVEL}" -v"${SPLIT_SIZE}" "${SEVENZIP_FILE}" "${TAR_FILE}" "${SNAP_COPY}"
   info "backup done: ${SEVENZIP_FILE}.001 (+ $(ls "${SEVENZIP_FILE}".0* 2>/dev/null | wc -l) volumes)"
 else
-  "${SEVENZIP}" a -t7z -mhe=on -p -mx="${MX_LEVEL}" "${SEVENZIP_FILE}" "${TAR_FILE}"
+  "${SEVENZIP}" a -t7z -mhe=on -p -mx="${MX_LEVEL}" "${SEVENZIP_FILE}" "${TAR_FILE}" "${SNAP_COPY}"
   info "backup done: ${SEVENZIP_FILE}"
 fi

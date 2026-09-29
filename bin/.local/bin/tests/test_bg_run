@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+# Regression tests for bin/.local/bin/bg_run: option positions (before/after the
+# program), pass-through of program arguments, PID file lifecycle, stale PID
+# handling, quoting and the shebang-script case. Everything runs in a
+# disposable scratch tree, and every process the suite starts is cleaned up on
+# exit.
+set -uo pipefail
+
+# Resolve the checkout from this file's own location, following symlinks so a
+# stow-linked copy (e.g. ~/.local/bin/tests/...) still finds the real script.
+SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")"
+REPO_ROOT="$(cd "$(dirname "${SELF}")/../../../.." && pwd)"
+SCRIPT="${BG_RUN_SCRIPT:-${REPO_ROOT}/bin/.local/bin/bg_run}"
+ROOT="${BG_RUN_TEST_DIR:-${TMPDIR:-/tmp}/bg_run-test}"
+PID_DIR="${ROOT}/pid"
+KEEP=false
+PASS=0
+FAIL=0
+FAILED=()
+
+function usage() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Regression tests for bg_run, run against the disposable scratch tree
+${ROOT}.
+
+Options:
+  -k, --keep   keep the scratch tree on success too (default: dropped on success)
+  -h, --help   show this help
+
+Environment:
+  BG_RUN_SCRIPT     script under test (default: <repo>/bin/.local/bin/bg_run)
+  BG_RUN_TEST_DIR   scratch tree (default: \${TMPDIR:-/tmp}/bg_run-test)
+
+Exit status: 0 all checks passed, 1 any check failed.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "${1}" in
+  -k | --keep) KEEP=true ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+  esac
+  shift
+done
+
+# The scratch tree is wiped up front and again on success, so never accept a
+# path that holds the script under test or a user directory.
+if [[ -z "${ROOT}" || "${ROOT}" == "/" || "${ROOT}" == "${HOME}" ]]; then
+  echo "refusing to use '${ROOT}' as scratch dir" >&2
+  exit 2
+fi
+case "${SCRIPT}" in
+"${ROOT}"/*)
+  echo "refusing: scratch dir ${ROOT} contains the script under test" >&2
+  exit 2
+  ;;
+esac
+if [[ ! -f "${SCRIPT}" ]]; then
+  echo "script under test not found: ${SCRIPT}" >&2
+  exit 2
+fi
+
+function pass() {
+  PASS=$((PASS + 1))
+  printf 'PASS  %s\n' "$1"
+}
+function fail() {
+  FAIL=$((FAIL + 1))
+  FAILED+=("$1")
+  printf 'FAIL  %s\n' "$1"
+}
+function sec() { printf '\n===== %s =====\n' "$1"; }
+
+function ck() { # ck <desc> <expected-rc> <cmd...>
+  local desc="$1" want="$2"
+  shift 2
+  "$@" >"${ROOT}/out.log" 2>&1
+  local rc=$?
+  if [[ "${rc}" == "${want}" ]]; then
+    pass "${desc}"
+  else
+    fail "${desc} (rc=${rc}, want ${want})"
+    sed -n '1,6p' "${ROOT}/out.log" | sed 's/^/        /'
+  fi
+}
+
+function has() { # has <desc> <text> <file>
+  if grep -qF -- "$2" "$3" 2>/dev/null; then pass "$1"; else fail "$1 (no '$2' in $3)"; fi
+}
+function is_file() { if [[ -e "$2" ]]; then pass "$1"; else fail "$1 (missing $2)"; fi; }
+function no_file() { if [[ -e "$2" ]]; then fail "$1 ($2 exists)"; else pass "$1"; fi; }
+function eq() { if [[ "$2" == "$3" ]]; then pass "$1"; else fail "$1 (got '$2', want '$3')"; fi; }
+
+function wfile() {
+  mkdir -p "$(dirname "$1")"
+  printf '%s\n' "$2" >"$1"
+}
+
+# Terminate whatever the suite left running, so a failure cannot leak daemons.
+function cleanup() {
+  local f pid
+  for f in "${PID_DIR}"/*.pid; do
+    [[ -f "${f}" ]] || continue
+    pid="$(<"${f}")"
+    if [[ "${pid}" =~ ^[0-9]+$ ]]; then kill -TERM "${pid}" 2>/dev/null; fi
+  done
+  sleep 0.2
+  for f in "${PID_DIR}"/*.pid; do
+    [[ -f "${f}" ]] || continue
+    pid="$(<"${f}")"
+    if [[ "${pid}" =~ ^[0-9]+$ ]]; then kill -KILL "${pid}" 2>/dev/null; fi
+  done
+}
+trap cleanup EXIT
+
+rm -rf "${ROOT}"
+mkdir -p "${PID_DIR}"
+
+############################################################ group 1: CLI
+sec "group 1: CLI"
+
+ck "help before program (-h)" 0 "${SCRIPT}" -h
+ck "help before program (--help)" 0 "${SCRIPT}" --help
+ck "no program given" 1 "${SCRIPT}"
+ck "unknown option before program" 1 "${SCRIPT}" --nope myprog
+has "unknown option reported" "unknown option" "${ROOT}/out.log"
+ck "trailing option without a value" 1 "${SCRIPT}" -d
+has "missing value reported" "needs a value" "${ROOT}/out.log"
+
+#################################### group 2: options in either position
+sec "group 2: options before and after the program"
+
+ck "start with options before the program" 0 "${SCRIPT}" -d "${PID_DIR}" sleep 30
+is_file "pid file created" "${PID_DIR}/sleep.pid"
+ck "stop with -s after the program" 0 "${SCRIPT}" -d "${PID_DIR}" sleep -s stop
+no_file "pid file removed after stop" "${PID_DIR}/sleep.pid"
+
+ck "restart" 0 "${SCRIPT}" -d "${PID_DIR}" sleep 30
+ck "reload with -s after the program" 0 "${SCRIPT}" -d "${PID_DIR}" sleep -s reload
+ck "restart over a dead pid file" 0 "${SCRIPT}" -d "${PID_DIR}" sleep 30
+has "stale pid file reported" "stale pid file detected" "${ROOT}/out.log"
+ck "stop with --signal after the program" 0 "${SCRIPT}" -d "${PID_DIR}" --signal stop sleep
+no_file "pid file cleaned after long-form stop" "${PID_DIR}/sleep.pid"
+
+################################### group 3: program arguments pass through
+sec "group 3: program arguments are not swallowed"
+
+ck "sleep rejects -f (bg_run did not take it)" 1 "${SCRIPT}" -d "${PID_DIR}" sleep -f 5
+has "program error surfaced" "option" "${ROOT}/out.log"
+ck "trailing -h goes to the program" 1 "${SCRIPT}" -d "${PID_DIR}" sleep -h
+has "program rejected -h" "option" "${ROOT}/out.log"
+ck "unknown long option goes to the program" 1 "${SCRIPT}" -d "${PID_DIR}" sleep --nope
+has "program rejected --nope" "option" "${ROOT}/out.log"
+ck "-- hands -s stop to the program" 1 "${SCRIPT}" -d "${PID_DIR}" -- sleep -s stop
+has "program rejected -s" "option" "${ROOT}/out.log"
+ck "tail -f survives (short -f untouched)" 0 "${SCRIPT}" -d "${PID_DIR}" tail -f /dev/null
+is_file "tail pid file created" "${PID_DIR}/tail.pid"
+ck "stop tail" 0 "${SCRIPT}" -d "${PID_DIR}" --signal stop tail
+
+############################## group 4: quoting and post-program long options
+sec "group 4: quoting and post-program long options"
+
+ck "space-containing argument survives" 0 "${SCRIPT}" -d "${PID_DIR}" bash -c \
+  'echo "hello world" > '"${ROOT}"'/spaces.txt; while :; do sleep 0.2; done'
+eq "argument written verbatim" "$(cat "${ROOT}/spaces.txt")" "hello world"
+ck "stop bash" 0 "${SCRIPT}" -d "${PID_DIR}" --signal stop bash
+ck "--pid-dir after the program is recognized" 0 "${SCRIPT}" \
+  bash -c 'while :; do sleep 0.2; done' --pid-dir "${PID_DIR}"
+is_file "post-program --pid-dir honored" "${PID_DIR}/bash.pid"
+ck "stop bash again" 0 "${SCRIPT}" -d "${PID_DIR}" --signal stop bash
+
+####################################### group 5: daemon lifecycle (HUP trap)
+sec "group 5: daemon lifecycle"
+
+ck "start daemon" 0 "${SCRIPT}" -d "${PID_DIR}" bash -c \
+  'trap "echo got-hup >>'"${ROOT}"'/hup.log" HUP; trap "exit 0" TERM; while :; do sleep 0.2; done'
+ck "reload via -s after the program" 0 "${SCRIPT}" -d "${PID_DIR}" bash -s reload
+sleep 0.5
+eq "SIGHUP reached the daemon" "$(grep -c . "${ROOT}/hup.log" 2>/dev/null | tr -d ' ')" "1"
+ck "stop via --signal after the program" 0 "${SCRIPT}" -d "${PID_DIR}" --signal stop bash
+no_file "daemon stopped cleanly" "${PID_DIR}/bash.pid"
+
+############################# group 6: shebang script as the program (regression)
+sec "group 6: shebang script as the program"
+
+SVC="${ROOT}/svc.sh"
+wfile "${SVC}" "#!/usr/bin/env bash"
+cat >>"${SVC}" <<EOF
+echo \$\$ >"${ROOT}/alive.pid"
+trap 'echo got-hup >>"${ROOT}/svc-hup.log"' HUP
+trap 'rm -f "${ROOT}/alive.pid"; exit 0' TERM
+while :; do sleep 0.2; done
+EOF
+chmod +x "${SVC}"
+
+# The kernel stores the interpreter ("bash") in argv[0] and passes the script as
+# an argument, so the recorded process must still be recognized as ours.
+ck "start a shebang script" 0 "${SCRIPT}" -d "${PID_DIR}" "${SVC}"
+is_file "pid file created for the script" "${PID_DIR}/svc.sh.pid"
+sleep 0.3
+is_file "the script really is running" "${ROOT}/alive.pid"
+ck "reload the script" 0 "${SCRIPT}" -d "${PID_DIR}" svc.sh -s reload
+sleep 0.5
+eq "SIGHUP reached the script" "$(grep -c . "${ROOT}/svc-hup.log" 2>/dev/null | tr -d ' ')" "1"
+ck "stop the script" 0 "${SCRIPT}" -d "${PID_DIR}" svc.sh -s stop
+no_file "pid file removed for the script" "${PID_DIR}/svc.sh.pid"
+no_file "the script exited on SIGTERM" "${ROOT}/alive.pid"
+
+############################################################### summary
+printf '\n===== summary =====\n'
+printf 'pass: %d\nfail: %d\n' "${PASS}" "${FAIL}"
+if [[ ${FAIL} -gt 0 ]]; then
+  printf 'failed checks:\n'
+  printf '  %s\n' "${FAILED[@]}"
+  printf 'scratch tree kept for inspection: %s\n' "${ROOT}"
+  exit 1
+fi
+if ${KEEP}; then
+  printf 'scratch tree kept: %s\n' "${ROOT}"
+else
+  rm -rf "${ROOT}"
+fi
+exit 0

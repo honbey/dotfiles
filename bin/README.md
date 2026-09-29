@@ -5,6 +5,18 @@
 可以通过 `stow` 链接到 `$HOME` 目录，不过因为有些第三方工具会创建软链接或脚本到这个目录，
 所以 `.gitignore` 设置 `*` 默认忽略所有文件，通过 `!files` 追踪需要被 `git` 管理的文件。
 
+## 脚本一览
+
+| 脚本 | 作用 |
+| --- | --- |
+| `rm_dangling_links` | 清理失效的软链接（逐个确认，`-n` 预览） |
+| `install_brew` | 安装 Homebrew（清华镜像）与脚本内定义的包 |
+| `new_container` | 生成 Podman Quadlet 容器配置（`.container`、`.env` 等） |
+| `backup_home` | 增量备份 `$HOME`（tar + 加密 7z），`-x` 恢复 |
+| `bg_run` | 后台运行程序，PID 文件 + 时间戳日志，支持 stop/reload |
+
+回归测试与脚本同级，放在 `.local/bin/tests/`（`stow bin` 后即 `~/.local/bin/tests`，见该目录下的 `README.md`）。
+
 ## 约定
 
 - 文件命名采用 snake_case
@@ -13,6 +25,7 @@
 ## rm_dangling_links
 
 删除失效的文件链接（dangling symbolic links），扫描后端优先使用 `fd`，无 `fd` 时回退到 `find`。
+非 `-n` 模式下逐个询问是否删除，确认信息从 `/dev/tty` 读取；没有交互终端时会报错并提示改用 `-n`。
 
 - `-d DIR, --directory DIR`：扫描目录（默认 `.`，支持 `~` 展开）
 - `-D N, --max-depth N`：最大扫描深度（默认 1）
@@ -21,7 +34,7 @@
 
 ## install_brew
 
-安装 Homebrew（缺失时）及脚本内定义的软件包列表。包列表原先放在仓库根目录的 `brew/` 下，
+安装 Homebrew（缺失时，走清华镜像）及脚本内定义的软件包列表。包列表原先放在仓库根目录的 `brew/` 下，
 现已合并进本脚本，`brew/Dockerfile` 不再需要（Linuxbrew 镜像由其他仓库维护）。
 
 安装前会做两层判断，命中任一即跳过，避免与系统自带的版本冲突：
@@ -61,7 +74,7 @@ install_brew -a -c      # 全部（含 macOS 应用）
 
 快速生成 Podman Quadlet 容器配置（`<name>.container`、`*.env`），省去从现有单元文件复制改写的麻烦。
 
-模板取本仓库 20 个单元文件中**最常使用的配置项**，其余可选项以注释形式输出，按需取消注释即可：
+模板取本仓库 `podman/` 单元文件中最常用的配置项，其余可选项以注释形式输出，按需取消注释即可：
 
 - 直接生成：`Description`、`After`、`StartLimit*`、`Image`、`ContainerName`、`EnvironmentFile`、
   `PublishPort`、`Network`、`PodmanArgs`、`LogDriver`、`StopTimeout`、`Health*`、
@@ -76,7 +89,8 @@ install_brew -a -c      # 全部（含 macOS 应用）
 网络 IP 沿用仓库约定：`-p` 指定的 4 位宿主端口 `ABCD` 映射为 `10.26.AB.CD`，
 例如 `-p 1040` 得到 `ip=10.26.10.40`；未指定 `-p` 时 `PublishPort` / `Network` 以注释加占位符输出。
 
-选项需写在 NAME 之前（与 `install.sh` 一致）。
+选项需写在 NAME 之前（与 `install.sh` 一致）；NAME 需匹配 `^[a-z][a-z0-9._-]*$`，多余的位置参数会报错。
+已存在的文件默认拒绝覆盖（`-f` 强制），输出目录不存在时自动创建（`-n` 只告警）。
 
 - `-i IMAGE, --image IMAGE`：容器镜像（默认 `docker.io/library/NAME:latest`）
 - `-D DESC, --description DESC`：Unit 描述（默认 `NAME container service`）
@@ -124,7 +138,10 @@ new_container -p 1200 -P 3000 -c 4 -m 4g -V -C grafana
 
 - `-F, --first-run`：首次全量备份（创建快照；快照已存在时拒绝执行）
 - `-C, --force-full`：强制全量备份（输出目录已有备份时，在 `<日期>` 子目录开启新备份链）
-- `-o DIR, --output-dir DIR`：输出目录（默认 `.`，支持 `~` 展开，自动创建）
+- `-x, --extract`：恢复模式（解密输出目录中的备份链，从最旧一级开始解包）
+- `-r DIR, --restore-dir DIR`：恢复目标目录（默认 `<output-dir>/restore_<date>`）
+- `-d DATE, --date DATE`：仅恢复到 DATE（YYYYMMDD，默认最新归档）
+- `-o DIR, --output-dir DIR`：输出目录（默认 `.`，支持 `~` 展开，自动创建；`-x` 时为备份来源目录）
 - `-l N, --mx-level N`：7z 压缩级别 0-9（默认 1）
 - `-s SIZE, --split-size SIZE`：7z 分卷，必须带大小（单位 `b/k/m/g`，如 `4g`；默认不分卷）
 - `-g, --generate-excluded`：生成 `~/.backup_excluded` 模板后退出（已存在时拒绝）
@@ -136,16 +153,46 @@ new_container -p 1200 -P 3000 -c 4 -m 4g -V -C grafana
 - `home_root-f85ba416-20260806.tar`：tar 归档（不压缩）
 - `home_root-f85ba416-20260806.7z`：加密 7z 归档（分卷时为 `.7z.001`、`.7z.002`…）
 - `home_root-f85ba416.snap`：增量快照（每次运行更新）
-- `home_root-f85ba416-20260806.snap`：快照副本（与归档同 base，供恢复）
+- `home_root-f85ba416-20260806.snap`：快照副本（与归档同 base，随 `.7z` 一起打包）
 
-恢复（按时间从最旧开始，先解压对应 `.7z`）：
+恢复（`-x`，分卷与快照副本自动处理）：
 
-```
-tar --listed-incremental=<date>.snap -xf <date>.tar
+```bash
+backup_home -x -o <backup-dir>                                # 恢复到最新状态
+backup_home -x -o <backup-dir> -d 20260806 -r ~/restore_0806  # 恢复到指定日期
 ```
 
-分卷归档解压（自动读取全部分卷）：
+解出的 `.tar`（及 `.snap` 副本）保留在 `<restore-dir>/tars/`，恢复后的家目录在
+`<restore-dir>/home/`（该目录必须为空）。解压按 GNU tar 约定逐级进行：提取阶段不读快照
+（`--listed-incremental=/dev/null`），每级会把目录对齐到该日期状态并删除当时不存在的文件。
 
+回归测试：`.local/bin/tests/test_backup_home`。
+
+## bg_run
+
+把程序丢到后台运行：`<pid-dir>/<program>.pid` 记录 PID，输出追加到带时间戳的
+`<pid-dir>/<program>-<时间戳>.log`。
+
+- 用 `setsid` 脱离会话，关掉终端后仍存活；不套 `nohup`，SIGHUP 没被忽略，`reload` 才有意义
+- 启动前校验 PID 文件（仅数字）并比对 `/proc/<pid>/cmdline` 里 argv[0] 的基名是否等于目标程序，
+  避免 PID 复用和短名误匹配（如 `sh` 命中 `bash`）
+- 旧进程仍存活时默认拒绝启动；`-f` 先发 `SIGTERM`，最多等 1 秒仍未退出则 `SIGKILL`
+- 启动 0.3 秒后确认进程仍在，若已退出则删除 PID 文件并打印日志末尾 5 行
+- `stop` 发完 `SIGTERM` 后最多等 2 秒，进程真退出才删 PID 文件（超时保留，下次按陈旧文件处理）
+- 选项可写在程序名之前或之后：之前 `-d/-f/-s/-h` 与对应长选项都识别；之后只识别 `--pid-dir`、
+  `--force`、`--signal` 和 `-s stop|reload`，其余（含 `-h/--help` 与程序自己的 `-f/-d/-s`）原样传给程序
+- `--` 之后的所有内容（含空格）原样传给程序，可用来传递与 bg_run 同名的选项
+
+- `-d DIR, --pid-dir DIR`：PID 文件与日志目录（默认 `.`，支持 `~` 展开）
+- `-f, --force`：先终止存活的旧进程再启动
+- `-s ACTION, --signal ACTION`：`stop` 发 `SIGTERM`、`reload` 发 `SIGHUP`，发完即退出
+- `-h, --help`：查看帮助
+
+```bash
+bg_run -d ~/logs my_server --port 8080      # 后台启动
+bg_run -d ~/logs my_server -s reload        # 重载（SIGHUP，选项写在程序名之后同样生效）
+bg_run -d ~/logs --signal stop my_server    # 停止（SIGTERM）
+bg_run -d ~/logs -- tail -f app.log         # -- 之后原样传给程序
 ```
-7zz x home_root-f85ba416-20260806.7z.001
-```
+
+回归测试：`.local/bin/tests/test_bg_run`。

@@ -24,6 +24,11 @@ Usage: $(basename "$0") [OPTIONS] <program> [args...]
 Run a program in the background; write its PID to <pid-dir>/<program>.pid and
 append its output to a timestamped log <pid-dir>/<program>-<ts>.log.
 
+Options may be written before or after <program>. After it, only --pid-dir,
+--force, --signal and "-s stop|reload" are read as this script's options, so a
+program's own -f/-d/-h/-s flags pass through untouched; everything after "--"
+goes to the program as well.
+
 Options:
   -d DIR, --pid-dir DIR  Directory for the PID file and logs (default: current dir)
   -f, --force            Terminate a live old process first, then restart
@@ -35,50 +40,113 @@ Options:
 EOF
 }
 
-# Map long options to short ones before getopts. Use an array so that program
-# arguments containing spaces (e.g. `bash -c '...'`) survive unmodified.
-mapped_args=()
-for arg in "$@"; do
-  case "${arg}" in
-  --help) mapped_args+=(-h) ;;
-  --pid-dir=*) mapped_args+=(-d "${arg#*=}") ;;
-  --pid-dir) mapped_args+=(-d) ;;
-  --force) mapped_args+=(-f) ;;
-  --signal=*) mapped_args+=(-s "${arg#*=}") ;;
-  --signal) mapped_args+=(-s) ;;
-  *) mapped_args+=("${arg}") ;;
-  esac
-done
-# Guard the empty case: on bash < 4.4 a bare "${arr[@]}" under `set -u` errors
-# instead of reaching the "no program given" check below.
-if [[ ${#mapped_args[@]} -gt 0 ]]; then
-  set -- "${mapped_args[@]}"
-else
-  set --
-fi
+# Parse options in any position, keeping the program and its arguments in an
+# array so that arguments containing spaces (e.g. `bash -c '...'`) survive.
+# Only the long forms plus "-s stop|reload" are read after <program>, otherwise
+# a program's own -f/-d/-h/-s would be swallowed silently; "--" ends option
+# parsing, so everything after it reaches the program untouched.
+PROGRAM=()
+program_seen=false
+options_ended=false
 
-while getopts "d:fs:h" opt; do
-  case "${opt}" in
-  d) PID_DIR="${OPTARG}" ;;
-  f) FORCE=true ;;
-  s) ACTION="${OPTARG}" ;;
-  h)
+# Guard a trailing option that expects a value.
+function need_value() {
+  if [[ "$2" -lt 2 ]]; then
+    err "option $1 needs a value"
+    usage
+    exit 1
+  fi
+}
+
+while [[ $# -gt 0 ]]; do
+  token="$1"
+
+  if ${options_ended}; then
+    PROGRAM+=("${token}")
+    shift
+    continue
+  fi
+
+  if ${program_seen}; then
+    case "${token}" in
+    --pid-dir=*) PID_DIR="${token#*=}" ;;
+    --pid-dir)
+      need_value "${token}" $#
+      PID_DIR="$2"
+      shift
+      ;;
+    --force) FORCE=true ;;
+    --signal=*) ACTION="${token#*=}" ;;
+    --signal)
+      need_value "${token}" $#
+      ACTION="$2"
+      shift
+      ;;
+    -s)
+      if [[ "${2:-}" == "stop" || "${2:-}" == "reload" ]]; then
+        ACTION="$2"
+        shift
+      else
+        PROGRAM+=("${token}")
+      fi
+      ;;
+    *) PROGRAM+=("${token}") ;;
+    esac
+    shift
+    continue
+  fi
+
+  case "${token}" in
+  --pid-dir=*) PID_DIR="${token#*=}" ;;
+  --pid-dir)
+    need_value "${token}" $#
+    PID_DIR="$2"
+    shift
+    ;;
+  --force) FORCE=true ;;
+  --signal=*) ACTION="${token#*=}" ;;
+  --signal)
+    need_value "${token}" $#
+    ACTION="$2"
+    shift
+    ;;
+  --help | -h)
     usage
     exit 0
     ;;
-  *)
+  --) options_ended=true ;;
+  -d?*) PID_DIR="${token#-d}" ;;
+  -d)
+    need_value "${token}" $#
+    PID_DIR="$2"
+    shift
+    ;;
+  -f) FORCE=true ;;
+  -s?*) ACTION="${token#-s}" ;;
+  -s)
+    need_value "${token}" $#
+    ACTION="$2"
+    shift
+    ;;
+  -*)
+    err "unknown option: ${token}"
     usage
     exit 1
     ;;
+  *)
+    PROGRAM=("${token}")
+    program_seen=true
+    ;;
   esac
+  shift
 done
-shift $((OPTIND - 1))
 
-if [[ -z "$*" ]]; then
+if [[ ${#PROGRAM[@]} -eq 0 ]]; then
   err "no program given"
   usage
   exit 1
 fi
+set -- "${PROGRAM[@]}"
 
 # Expand a leading ~ so that --pid-dir=~/logs works
 PID_DIR="${PID_DIR/#\~/$HOME}"
@@ -96,15 +164,24 @@ function read_pid() {
   echo "${content}"
 }
 
-# Check whether the recorded process is alive and really is our program:
-# compare the basename of argv[0] instead of a substring grep, so short names
-# cannot false-match (e.g. "sh" inside "bash") and PID reuse stays safe.
+# Check whether the recorded process is alive and really is our program. Every
+# cmdline element is compared by basename, never as a substring, so short names
+# cannot false-match (e.g. "sh" inside "bash") and PID reuse stays safe. argv[0]
+# alone is not enough: for a shebang script the kernel stores the interpreter
+# there and passes the script as an argument ("bash /path/to/svc.sh"), so the
+# script would look like a foreign process and get killed as "not running".
 function is_running() {
-  local pid="$1" argv0
+  local pid="$1" element
   [[ "${pid}" =~ ^[0-9]+$ ]] || return 1
   kill -0 "${pid}" 2>/dev/null || return 1
-  argv0="$(head -c 256 "/proc/${pid}/cmdline" 2>/dev/null | tr '\0' '\n' | head -n 1)"
-  [[ "$(basename "${argv0}")" == "${PROGRAM_BASENAME}" ]]
+  [[ -r "/proc/${pid}/cmdline" ]] || return 1
+  while IFS= read -r element; do
+    [[ -n "${element}" ]] || continue
+    if [[ "$(basename "${element}")" == "${PROGRAM_BASENAME}" ]]; then
+      return 0
+    fi
+  done < <(tr '\0' '\n' <"/proc/${pid}/cmdline")
+  return 1
 }
 
 function send_signal() {
