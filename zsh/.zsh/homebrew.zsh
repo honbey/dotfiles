@@ -24,7 +24,7 @@ fi
 #   $1 string: mirror's name, support lists: ["tsinghua"(default), "official", "ustc", "ali"]
 #   *return null
 function brew_mirror_on() {
-  type brew &>/dev/null || (echo "Please install Homebrew!" && return)
+  command -v brew &>/dev/null || (echo "Please install Homebrew!" && return)
   local mirror="${1:-tsinghua}"
   case "${mirror}" in
   official)

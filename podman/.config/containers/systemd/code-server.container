@@ -10,19 +10,17 @@ Image=docker.cnb.cool/honbey/cnb-dev-env:latest
 
 ContainerName=code-server
 
-Exec=--auth=none \
-     --link-protection-trusted-domains=*.freewisdom.cn \
-     --proxy-domain=code-{{port}}.freewisdom.cn:33
+Exec=--auth=none --proxy-domain=code-{{port}}.freewisdom.cn:33
 
 #StopSignal=SIGINT
 StopTimeout=10
 
 EnvironmentFile=%h/.config/containers/systemd/code-server.env
 
-Tmpfs=/tmp:rw,size=1g,mode=1777
+#Tmpfs=/tmp:rw,size=2g,mode=1777
 # caches or unimportant files in HDD
+Volume=/opt/data/cache/code-server/tmp:/tmp:Z
 Volume=/opt/data/cache/code-server/share:/share:Z
-Volume=/opt/data/cache/code-server/tmp-data:/tmp-data:Z
 Volume=/opt/data/cache/code-server/cache:/root/.cache:Z
 Volume=/opt/data/cache/code-server/cache-linuxbrew:/home/linuxbrew/.cache:Z
 Volume=/opt/data/cache/code-server/npm:/root/.npm:Z

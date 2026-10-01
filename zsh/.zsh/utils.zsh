@@ -1,5 +1,5 @@
 ### GnuPG
-if type gpg &>/dev/null; then
+if command -v gpg &>/dev/null; then
   # aliases
   alias gnupg='gpg'
 
@@ -30,10 +30,13 @@ if type gpg &>/dev/null; then
     echo -e 'pinentry-mode loopback' >"${HOME}/.gnupg/gpg.conf"
   fi
   if ! [[ -f "${HOME}/.gnupg/gpg-agent.conf" ]]; then
-    if [[ -d /opt/homebrew ]]; then
+    if [[ -f /opt/homebrew/bin/pinentry-tty ]]; then
       echo -e "enable-ssh-support\npinentry-program /opt/homebrew/bin/pinentry-tty\nallow-loopback-pinentry" \
         >"${HOME}/.gnupg/gpg-agent.conf"
-    elif [[ -d /home/linuxbrew ]]; then
+    elif [[ -f /usr/bin/pinentry ]]; then
+      echo -e "enable-ssh-support\npinentry-program /usr/bin/pinentry\nallow-loopback-pinentry" \
+        >"${HOME}/.gnupg/gpg-agent.conf"
+    elif [[ -f /home/linuxbrew/.linuxbrew/bin/pinentry-tty ]]; then
       echo -e "enable-ssh-support\npinentry-program /home/linuxbrew/.linuxbrew/bin/pinentry-tty\nallow-loopback-pinentry" \
         >"${HOME}/.gnupg/gpg-agent.conf"
     fi
@@ -61,11 +64,11 @@ alias gt='git tag'
 alias gd='git diff'
 
 ### Vim/NeoVim
-if type nvim &>/dev/null; then
+if command -v nvim &>/dev/null; then
   alias vi='nvim' vim='nvim'
   export EDITOR=nvim
   [[ -d "${HOME}/.local/share/nvim/mason/bin" ]] && add_path "${HOME}/.local/share/nvim/mason/bin"
-elif type vim &>/dev/null; then
+elif command -v vim &>/dev/null; then
   alias vi='vim' vim='vim'
   export EDITOR=vim
 fi
@@ -76,10 +79,10 @@ alias del="rip -i --graveyard ${HOME}/.graveyard" trash="rip -i --graveyard ${HO
 alias rm="echo Use 'del', or the full path i.e. '/bin/rm'."
 
 ### FZF
-type fzf &>/dev/null && eval "$(fzf --zsh)"
+command -v fzf &>/dev/null && eval "$(fzf --zsh)"
 
 ### Zoxide
-if type zoxide &>/dev/null; then
+if command -v zoxide &>/dev/null; then
   # Patterns are separated by colons (zoxide 0.10 parses them with
   # env::split_paths; space-separated values silently disable exclusion).
   export _ZO_EXCLUDE_DIRS="\

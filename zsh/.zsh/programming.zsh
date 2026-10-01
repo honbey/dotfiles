@@ -72,7 +72,7 @@ pip_mirror_on tsinghua
 alias pip='pip3'
 
 ### Rust
-if type rustup &>/dev/null; then
+if command -v rustup &>/dev/null; then
   export CARGO_HOME="${HOME}/.cargo"
   export RUSTUP_HOME="${HOME}/.rustup"
   export CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -85,11 +85,11 @@ if type rustup &>/dev/null; then
   fi
   add_path "${CARGO_HOME}/bin"
 
-# Set mirror of Rust to escalate download speed.
-#   $1 string: mirror's name, support lists: ["rsproxy"(default), "official", "tuna", "ustc", "ali"]
-#   *return null
-function rust_mirror_on() {
-  local mirror="${1:-rsproxy}"
+  # Set mirror of Rust to escalate download speed.
+  #   $1 string: mirror's name, support lists: ["rsproxy"(default), "official", "tuna", "ustc", "ali"]
+  #   *return null
+  function rust_mirror_on() {
+    local mirror="${1:-rsproxy}"
     case "${mirror}" in
     official)
       ln -sfn "config.toml.official" "${HOME}/.cargo/config.toml"
@@ -129,13 +129,16 @@ function rust_mirror_on() {
 fi
 
 ### Golang
-if type go &>/dev/null; then
+if command -v go &>/dev/null; then
   export GOPATH="${HOME}/.go"
+  if ! [[ -f "${HOME}/.config/go/env" ]]; then
+    go env -w GOPROXY=https://goproxy.cn,direct
+  fi
   add_path "${GOPATH}/bin"
 fi
 
 ### OpenCode
-if type opencode &>/dev/null; then
+if command -v opencode &>/dev/null; then
   export OPENCODE_DISABLE_LSP_DOWNLOAD=true
   export OPENCODE_DISABLE_CLAUDE_CODE=1
 fi

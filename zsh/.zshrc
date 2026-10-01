@@ -15,7 +15,7 @@ zinit snippet "${ZSH_HOME}/99-functions.zsh"
 [[ -d /home/linuxbrew/.linuxbrew/bin ]] && add_path "/home/linuxbrew/.linuxbrew/bin"
 
 # Load starship theme
-type starship &>/dev/null && eval "$(starship init zsh)"
+command -v starship &>/dev/null && eval "$(starship init zsh)"
 
 # Turbo mode
 zinit wait lucid is-snippet for \
@@ -29,7 +29,8 @@ zinit wait lucid is-snippet for \
 # Wait~
 zinit wait'1' lucid is-snippet for \
   nocompletions \
-  "${ZSH_HOME}/wait1-functions.zsh"
+  "${ZSH_HOME}/wait1-functions.zsh" \
+  "${ZSH_HOME}/wait1a-functions.zsh"
 # Functions need to be executed
 zinit wait'2' lucid is-snippet for \
   nocompletions \

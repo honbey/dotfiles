@@ -1,2 +1,2 @@
 # Custom config for different machine.
-export __DOTFILES__=""
+export __DOTFILES__="${HOME}/dotfiles"

@@ -16,7 +16,7 @@ function generate_passwd() {
   symbols) charset="A-Za-z0-9!@#$%^&*()_+{}[]|:;<>,.?~" ;;
   *) charset="$2" ;;
   esac
-  type openssl &>/dev/null && openssl_existed=true || openssl_existed=""
+  command -v openssl &>/dev/null && openssl_existed=true || openssl_existed=""
   [[ -n "$3" && "${openssl_existed}" ]] && hashed=true || hashed=""
   [[ -n "$4" && "${hashed}" ]] && salt="$4" || salt=""
   passphrase=$(LC_ALL=C tr -dc "${charset}" </dev/urandom | head -c "${length}")
@@ -111,8 +111,8 @@ function t() {
 #   * every source is tracked, is not a submodule and holds no untracked
 #     (non-ignored) files below it
 #   * the destination stays inside the same working tree and is not a submodule
-smart_mv() {
-  if [ "$#" -eq 0 ]; then
+function smart_mv() {
+  if [ "$" -eq 0 ]; then
     command mv
     return $?
   fi
@@ -151,7 +151,7 @@ smart_mv() {
     [ "$i" -gt "$optc" ] && operands+=("$arg")
   done
 
-  if [ -n "$unsupported" ] || [ "$#" -le "$optc" ] || [ "$(($# - optc))" -lt 2 ]; then
+  if [ -n "$unsupported" ] || [ "$" -le "$optc" ] || [ "$(($# - optc))" -lt 2 ]; then
     command mv "$@"
     return $?
   fi
@@ -229,14 +229,14 @@ alias mv='smart_mv'
 #   ALIAS_TIP_IGNORE=(ll la)  # alias names that should never be suggested
 #   ALIAS_TIP_PREFIX="..."    # text printed in front of the tip
 #   * return null
-(( ${+ALIAS_TIP_IGNORE} )) || typeset -ga ALIAS_TIP_IGNORE=()
+((${+ALIAS_TIP_IGNORE})) || typeset -ga ALIAS_TIP_IGNORE=()
 
 function _alias_tip_preexec() {
   emulate -L zsh
 
-  (( ${ALIAS_TIP_ENABLED:-1} )) || return 0
+  ((${ALIAS_TIP_ENABLED:-1})) || return 0
   # `$aliases` comes from zsh/parameter, without it there is nothing to compare.
-  (( ${+aliases} )) || zmodload zsh/parameter 2>/dev/null || return 0
+  ((${+aliases})) || zmodload zsh/parameter 2>/dev/null || return 0
 
   local typed="$1"
 
@@ -251,7 +251,7 @@ function _alias_tip_preexec() {
   typed="${typed%"${typed##*[![:space:]]}"}"
   local -a words
   words=("${(@Q)${(z)typed}}")
-  (( ${#words} )) || return 0
+  ((${#words})) || return 0
 
   # Look for the alias covering the longest prefix of the typed command.
   # Only `$aliases` is scanned, so global (`alias -g`) and suffix (`alias -s`)
@@ -260,21 +260,21 @@ function _alias_tip_preexec() {
   local -a awords
   local i n best_len=0 hit=0
   for name in ${(k)aliases}; do
-    (( ${ALIAS_TIP_IGNORE[(I)${name}]} )) && continue
+    ((${ALIAS_TIP_IGNORE[(I)${name}]})) && continue
     value="${aliases[${name}]}"
     # cheap pre-filter: the alias has to start with the same command
     [[ "${words[1]}" == "${value%%[[:space:]]*}" ]] || continue
     awords=("${(@Q)${(z)value}}")
     n=${#awords}
-    (( n > 0 && n <= ${#words} )) || continue
+    ((n > 0 && n <= ${#words})) || continue
     # `ls='ls --color=auto'` only appends flags, tipping it is pure noise
-    (( ${ALIAS_TIP_WRAPPERS:-0} )) || [[ "${name}" != "${awords[1]}" ]] || continue
+    ((${ALIAS_TIP_WRAPPERS:-0})) || [[ "${name}" != "${awords[1]}" ]] || continue
     hit=1
     for ((i = 1; i <= n; i++)); do
       [[ "${words[i]}" == "${awords[i]}" ]] || hit=0
-      (( hit )) || break
+      ((hit)) || break
     done
-    (( hit && n > best_len )) || continue
+    ((hit && n > best_len)) || continue
     best_len=${n}
     best_name="${name}"
   done
@@ -285,6 +285,6 @@ function _alias_tip_preexec() {
 }
 
 # Register only once, re-sourcing this file must not stack duplicate hooks.
-if (( ${preexec_functions[(I)_alias_tip_preexec]:-0} == 0 )); then
+if ((${preexec_functions[(I)_alias_tip_preexec]:-0} == 0)); then
   preexec_functions+=(_alias_tip_preexec)
 fi

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-export EXT_GROUPS=common,theme,node,go,rust,python
+export EXT_GROUPS=codebuddy,common,theme,node,go,rust,python
 
 /usr/bin/env bash /usr/local/bin/purge_extensions.sh && /bin/rm -rf /root/.cache/*
 
