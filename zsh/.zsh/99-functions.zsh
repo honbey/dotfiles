@@ -43,3 +43,16 @@ function show_path() {
 function show_fpath() {
   echo ${FPATH//:/\\n}
 }
+
+# eval
+function _cached_eval() {
+  local tool_name="$1"
+  local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/zsh"
+  local cache_file="$cache_dir/${tool_name}.zsh"
+  if [[ ! -f "$cache_file" ]] || [[ "$(command -v "$tool_name")" -nt "$cache_file" ]]; then
+    mkdir -p "$cache_dir"
+    shift
+    "$@" >"$cache_file"
+  fi
+  source "$cache_file"
+}

@@ -5,7 +5,7 @@ StartLimitIntervalSec=60
 StartLimitBurst=3
 
 [Container]
-Image=docker.io/searxng/searxng:2026.8.16-b2da6b90f
+Image=docker.io/searxng/searxng:2026.10.15-b00212a83
 
 ContainerName=searxng
 

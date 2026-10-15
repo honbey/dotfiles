@@ -79,7 +79,7 @@ alias del="rip -i --graveyard ${HOME}/.graveyard" trash="rip -i --graveyard ${HO
 alias rm="echo Use 'del', or the full path i.e. '/bin/rm'."
 
 ### FZF
-command -v fzf &>/dev/null && eval "$(fzf --zsh)"
+(($+commands[fzf])) && _cached_eval fzf fzf --zsh
 
 ### Zoxide
 if command -v zoxide &>/dev/null; then
@@ -88,9 +88,8 @@ if command -v zoxide &>/dev/null; then
   export _ZO_EXCLUDE_DIRS="\
 /tmp:/var:/proc:/sys:\
 ${HOME}/.cache:${HOME}/.npm:${HOME}/.cargo:${HOME}/.rustup:\
-${HOME}/**/target:${HOME}/**/node_modules:${HOME}/**/dist:${HOME}/**/build\
-${HOME}/aijia:${HOME}/aijia/**/*:"
-  eval "$(zoxide init zsh | sed 's/function zi()/function zd()/')"
+${HOME}/**/target:${HOME}/**/node_modules:${HOME}/**/dist:${HOME}/**/build:"
+  (($+commands[zoxide])) && _cached_eval zoxide zoxide init zsh
 fi
 
 ### Yazi
@@ -109,4 +108,40 @@ fi
 #   *return null
 function y() {
   yazi "$@"
+}
+
+### ls/eza
+if command -v eza &>/dev/null; then
+  alias ls='eza --group-directories-first'
+  alias la='eza -A --group-directories-first'
+  alias ll='eza -Alh --group-directories-first --git'
+  alias l.='eza -d .*'
+  alias l='eza -alF --group-directories-first'
+else
+  alias ls='ls --color=auto'
+  alias la='ls -A'
+  alias ll='ls -Ahl'
+  alias l.='ls -d .*'
+  alias l='ls -alF'
+fi
+
+#alias ls='ls --color=auto' la='ls -A' ll='ls -Ahl' l.='ls -d .*' l='ls -alF'
+### grep/ripgrep
+if command -v rg &>/dev/null; then
+  alias grep='rg --no-line-number --no-heading --with-filename'
+else
+  alias grep='grep --color=auto'
+fi
+
+### dl: du/dust
+if command -v dust &>/dev/null; then
+  alias dl='dust -d 1'
+else
+  alias dl='du -h --max-depth=1'
+fi
+
+### calculator
+function c() {
+  local scale="${BC_SCALE:-10}"
+  bc -l <<<"scale=$scale; $*"
 }

@@ -8,12 +8,13 @@ bindkey -e
 bindkey "^U" backward-kill-line
 
 # Aliases
-alias ls='ls --color=auto' la='ls -A' ll='ls -Ahl' l.='ls -d .*' l='ls -alF'
+#alias ls='ls --color=auto' la='ls -A' ll='ls -Ahl' l.='ls -d .*' l='ls -alF'
+#alias grep='grep --color=auto'
+#alias dl='du -h --max-depth=1'
 alias mv='mv -v' cp='cp -iv'
-alias grep='grep --color=auto' diff='diff --color=auto'
+alias diff='diff --color=auto'
 alias ..='cd ..' ...='cd ../..'
 alias :q='exit' :wq='exit'
-alias dl='du -h --max-depth=1'
 
 # History
 setopt inc_append_history

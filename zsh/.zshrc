@@ -15,7 +15,7 @@ zinit snippet "${ZSH_HOME}/99-functions.zsh"
 [[ -d /home/linuxbrew/.linuxbrew/bin ]] && add_path "/home/linuxbrew/.linuxbrew/bin"
 
 # Load starship theme
-command -v starship &>/dev/null && eval "$(starship init zsh)"
+(($+commands[starship])) && _cached_eval starship starship init zsh
 
 # Turbo mode
 zinit wait lucid is-snippet for \

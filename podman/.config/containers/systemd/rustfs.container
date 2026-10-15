@@ -5,7 +5,7 @@ StartLimitIntervalSec=60
 StartLimitBurst=3
 
 [Container]
-Image=docker.io/rustfs/rustfs:1.0.0-rc.6
+Image=docker.io/rustfs/rustfs:1.0.1
 
 ContainerName=rustfs
 
