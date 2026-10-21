@@ -112,7 +112,7 @@ function t() {
 #     (non-ignored) files below it
 #   * the destination stays inside the same working tree and is not a submodule
 function smart_mv() {
-  if [ "$" -eq 0 ]; then
+  if [ "$#" -eq 0 ]; then
     command mv
     return $?
   fi
@@ -151,7 +151,7 @@ function smart_mv() {
     [ "$i" -gt "$optc" ] && operands+=("$arg")
   done
 
-  if [ -n "$unsupported" ] || [ "$" -le "$optc" ] || [ "$(($# - optc))" -lt 2 ]; then
+  if [ -n "$unsupported" ] || [ "$#" -le "$optc" ] || [ "$(($# - optc))" -lt 2 ]; then
     command mv "$@"
     return $?
   fi

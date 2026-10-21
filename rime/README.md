@@ -87,29 +87,4 @@ Rime    rime    4
 鼠须管  rime    3
 https://rime.im/        rime    2
 Squirrel        rime    1
-
->       dy      2
-≥       dy      1
-<       xy      2
-≤       xy      1
-✔︎       correct 2
-✗       wrong   2
-×       times   2
-÷       division        2
-·       cdot    2
-●       ldot    2
-§       section 2
-
-TODO    todo
-
-# 修改了 symbol_v.yaml 的 `vi` -> `vii`
-# 为了有时在终端没切输入法的可以打出 vi
-# 不改的话没法生效，用 pin 固定也无效
-vi      vi      9
-
-# 个人信息
-# ...
-
-# 身边一些人的名字，不包含姓氏
-# ...
 ```
