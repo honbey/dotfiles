@@ -8,7 +8,6 @@ source "${ZINIT_HOME}/zinit.zsh"
 # Specific zsh config's directory
 ZSH_HOME="${HOME}/.zsh"
 # The function need loaded as soon as possible
-zinit ice lucid
 zinit snippet "${ZSH_HOME}/99-functions.zsh"
 
 # Homebrew/Linuxbrew
