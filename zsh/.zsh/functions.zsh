@@ -7,8 +7,8 @@ function update_local_snippets() {
   local ZI_SNIPPETS_PATH
   ZI_SNIPPETS_PATH=${ZSH_HOME#/}
   ZI_SNIPPETS_PATH=${ZI_SNIPPETS_PATH//\//--}
-  for i in $(ls ${ZSH_HOME}/[^_]*.zsh); do
-    zinit update "${ZI_SNIPPETS_PATH}/$(basename ${i})"
+  for i in ${ZSH_HOME}/[^_]*.zsh(N); do
+    zinit update "${ZI_SNIPPETS_PATH}/${i:t}"
   done
 }
 

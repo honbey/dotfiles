@@ -6,24 +6,22 @@ export LANGUAGE=C.UTF-8
 bindkey -e
 # let Ctrl+U clear the text before cursor
 bindkey "^U" backward-kill-line
+# No 0.4s wait for a second key after ESC (default 40).
+KEYTIMEOUT=1
+
+setopt autocd          # bare directory name = cd
+setopt nobeep
+setopt completeinword  # complete mid-word
+setopt alwaystoend
+setopt no_auto_remove_slash
 
 # Aliases
-#alias ls='ls --color=auto' la='ls -A' ll='ls -Ahl' l.='ls -d .*' l='ls -alF'
-#alias grep='grep --color=auto'
-#alias dl='du -h --max-depth=1'
-alias mv='mv -v' cp='cp -iv'
+alias cp='cp -iv'
 alias diff='diff --color=auto'
-alias ..='cd ..' ...='cd ../..'
+# `..` is covered by autocd; `...` is not a directory, so keep the alias.
+# `mv` is `smart_mv -v`, aliased in wait1-functions.zsh where the function lives.
+alias ...='cd ../..'
 alias :q='exit' :wq='exit'
-
-# History
-setopt inc_append_history
-setopt hist_find_no_dups
-setopt hist_ignore_all_dups
-setopt hist_reduce_blanks
-setopt hist_save_no_dups
-
-setopt no_auto_remove_slash
 
 # ENV
 [[ -f "${HOME}/.env" ]] && source "${HOME}/.env"

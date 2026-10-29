@@ -49,10 +49,17 @@ function _cached_eval() {
   local tool_name="$1"
   local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/zsh"
   local cache_file="$cache_dir/${tool_name}.zsh"
-  if [[ ! -f "$cache_file" ]] || [[ "$(command -v "$tool_name")" -nt "$cache_file" ]]; then
+  if [[ ! -s "$cache_file" ]] || [[ "${commands[$tool_name]}" -nt "$cache_file" ]]; then
     mkdir -p "$cache_dir"
     shift
-    "$@" >"$cache_file"
+    # Temp file: a failed init must not poison the cache.
+    local tmp="${cache_file}.$$"
+    if "$@" >"$tmp" 2>/dev/null && [[ -s "$tmp" ]]; then
+      command mv -f "$tmp" "$cache_file"
+    else
+      command rm -f "$tmp"
+      [[ -s "$cache_file" ]] || return 1
+    fi
   fi
   source "$cache_file"
 }

@@ -1,7 +1,7 @@
 ### Python
 # Acticate Python virtual environments.
 #   $1 string: name of venv
-#   $2 string: path of venv
+#   $2 string: parent directory of venvs, default ~/.venv
 #   *return null
 function ap() {
   if [[ -z "$1" ]]; then
@@ -14,17 +14,17 @@ function ap() {
     fi
     return
   fi
-  if [[ -z "$2" ]]; then
-    PYVENV_PATH="${DATA_DIR}/pyvenv"
-  else
-    PYVENV_PATH="$2"
+  local base="${2:-${HOME}/.venv}"
+  if [[ -f "${base}/$1/bin/activate" ]]; then
+    source "${base}/$1/bin/activate"
+    return
   fi
-  source "${PYVENV_PATH}/$1/bin/activate"
+  echo "No virtual env: $1"
 }
+# Complete the venvs `ap` can activate.
 _ap() {
   local -a venvs
-  local venvs=($(find ${HOME}/.venv -mindepth 1 -maxdepth 1 -type d |
-    awk -v FS='/' '{printf "%s\n", $NF}'))
+  [[ -d "${HOME}/.venv" ]] && venvs+=(${HOME}/.venv/*(N/:t))
   _describe 'virtual environments' venvs
 }
 compdef _ap ap
@@ -68,11 +68,14 @@ function pip_mirror_off() {
 alias uv_mirror_on="pip_mirror_on"
 alias uv_mirror_off="pip_mirror_off"
 
-pip_mirror_on tsinghua
-alias pip='pip3'
+# Keep an existing index config, otherwise fall back to the mirror.
+if [[ -z "${PIP_INDEX_URL}" && -z "${UV_DEFAULT_INDEX}" ]]; then
+  pip_mirror_on tsinghua
+fi
+(( $+commands[pip3] )) && alias pip='pip3'
 
 ### Rust
-if command -v rustup &>/dev/null; then
+if (( $+commands[rustup] )); then
   export CARGO_HOME="${HOME}/.cargo"
   export RUSTUP_HOME="${HOME}/.rustup"
   export CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -125,11 +128,12 @@ if command -v rustup &>/dev/null; then
     rust_mirror_on official
   }
 
-  rust_mirror_on rsproxy
+  # Skip the ln when the mirror is already active.
+  [[ "${RUSTUP_DIST_SERVER-}" == "https://rsproxy.cn" ]] || rust_mirror_on rsproxy
 fi
 
 ### Golang
-if command -v go &>/dev/null; then
+if (( $+commands[go] )); then
   export GOPATH="${HOME}/.go"
   if ! [[ -f "${HOME}/.config/go/env" ]]; then
     go env -w GOPROXY=https://goproxy.cn,direct
@@ -138,7 +142,7 @@ if command -v go &>/dev/null; then
 fi
 
 ### OpenCode
-if command -v opencode &>/dev/null; then
+if (( $+commands[opencode] )); then
   export OPENCODE_DISABLE_LSP_DOWNLOAD=true
   export OPENCODE_DISABLE_CLAUDE_CODE=1
 fi

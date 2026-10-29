@@ -1,6 +1,6 @@
 ### Homebrew
 # manual `brew shellenv`
-if [[ -d /opt/homebrew/bin ]]; then # macOS
+if [[ -d /opt/homebrew ]]; then # macOS
   export HOMEBREW_PREFIX="/opt/homebrew"
   export HOMEBREW_CELLAR="/opt/homebrew/Cellar"
   export HOMEBREW_REPOSITORY="/opt/homebrew/Homebrew"
@@ -8,7 +8,8 @@ if [[ -d /opt/homebrew/bin ]]; then # macOS
   add_fpath "/opt/homebrew/share/zsh/site-functions"
   add_path "/opt/homebrew/opt/coreutils/libexec/gnubin"
   add_path "/opt/homebrew/opt/gnu-sed/libexec/gnubin"
-  [ -z "${MANPATH-}" ] || export MANPATH=":${MANPATH#:}"
+  # Leading ':' keeps man's default paths.
+  [[ -n "${MANPATH-}" && "${MANPATH}" != :* ]] && export MANPATH=":${MANPATH}"
   export INFOPATH="/opt/homebrew/share/info:${INFOPATH:-}"
 elif [[ -d /home/linuxbrew/.linuxbrew ]]; then
   export HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
@@ -16,7 +17,8 @@ elif [[ -d /home/linuxbrew/.linuxbrew ]]; then
   export HOMEBREW_REPOSITORY="/home/linuxbrew/.linuxbrew/Homebrew"
   add_path "/home/linuxbrew/.linuxbrew/sbin"
   add_fpath "/home/linuxbrew/.linuxbrew/share/zsh/site-functions"
-  [ -z "${MANPATH-}" ] || export MANPATH=":${MANPATH#:}"
+  # Leading ':' keeps man's default paths.
+  [[ -n "${MANPATH-}" && "${MANPATH}" != :* ]] && export MANPATH=":${MANPATH}"
   export INFOPATH="/home/linuxbrew/.linuxbrew/share/info:${INFOPATH:-}"
 fi
 
@@ -24,7 +26,7 @@ fi
 #   $1 string: mirror's name, support lists: ["tsinghua"(default), "official", "ustc", "ali"]
 #   *return null
 function brew_mirror_on() {
-  command -v brew &>/dev/null || (echo "Please install Homebrew!" && return)
+  (( $+commands[brew] )) || (echo "Please install Homebrew!" && return)
   local mirror="${1:-tsinghua}"
   case "${mirror}" in
   official)

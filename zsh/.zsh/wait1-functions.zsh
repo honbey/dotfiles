@@ -16,7 +16,7 @@ function generate_passwd() {
   symbols) charset="A-Za-z0-9!@#$%^&*()_+{}[]|:;<>,.?~" ;;
   *) charset="$2" ;;
   esac
-  command -v openssl &>/dev/null && openssl_existed=true || openssl_existed=""
+  (( $+commands[openssl] )) && openssl_existed=true || openssl_existed=""
   [[ -n "$3" && "${openssl_existed}" ]] && hashed=true || hashed=""
   [[ -n "$4" && "${hashed}" ]] && salt="$4" || salt=""
   passphrase=$(LC_ALL=C tr -dc "${charset}" </dev/urandom | head -c "${length}")
@@ -38,12 +38,24 @@ alias generate_passphrase='generate_passwd'
 #   $@ int or string
 #   *return string or int
 function ts() {
+  # Builtin: no fork, no GNU `date -d`.
+  zmodload -F zsh/datetime b:strftime 2>/dev/null
+  local out fmt
   if [[ "$1" =~ ^[0-9]{10}$ ]]; then
-    date -d "@$1" '+%Y-%m-%d %H:%M:%S'
+    strftime -s out '%Y-%m-%d %H:%M:%S' "$1" && print -r -- "$out"
   elif [[ "$1" =~ ^[0-9]{13}$ ]]; then
-    date -d "@${1:0:10}" "+%Y-%m-%d %H:%M:%S.${1:10:13}"
+    strftime -s out '%Y-%m-%d %H:%M:%S' "${1:0:10}" &&
+      print -r -- "${out}.${1:10:13}"
   else
-    date -d "$1" "+%s"
+    for fmt in '%Y-%m-%d %H:%M:%S' '%Y-%m-%d %H:%M' '%Y-%m-%d' \
+      '%Y/%m/%d %H:%M:%S' '%Y/%m/%d'; do
+      strftime -r -s out "$fmt" "$1" 2>/dev/null && {
+        print -r -- "$out"
+        return 0
+      }
+    done
+    print -u2 -- "ts: cannot parse '$1'"
+    return 1
   fi
 }
 
@@ -98,10 +110,6 @@ function t() {
 }
 
 # smart_mv - `mv` that transparently uses `git mv` for git-tracked files.
-#
-# Install in ~/.zshrc:
-#   smart_mv() { ... }
-#   alias mv='smart_mv'
 #
 # `git mv` is used only when every one of these holds, otherwise the arguments
 # are forwarded verbatim to `mv`, so the alias is always safe:
@@ -169,7 +177,7 @@ function smart_mv() {
   local use_git=1
   (
     local src top dst_abs
-    command -v git >/dev/null 2>&1 || exit 1
+    (( $+commands[git] )) || exit 1
     [ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" = "true" ] || exit 1
     top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 1
     [ -n "$top" ] || exit 1
@@ -209,7 +217,7 @@ function smart_mv() {
   return $?
 }
 
-alias mv='smart_mv'
+alias mv='smart_mv -v'
 
 # Alias tips - nudge you when the command you just ran already has an alias.
 #

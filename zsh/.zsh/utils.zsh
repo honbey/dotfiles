@@ -1,48 +1,3 @@
-### GnuPG
-if command -v gpg &>/dev/null; then
-  # aliases
-  alias gnupg='gpg'
-
-  [[ -d "${HOME}/.gnupg" ]] || mkdir ${HOME}/.gnupg
-
-  # GPG-Agent
-  # Reference:
-  #   https://www.gnupg.org/documentation/manuals/gnupg/Agent-Options.html
-  #   https://wiki.archlinux.org/title/GnuPG#SSH_agent
-  #   https://github.com/NeogitOrg/neogit/blob/master/doc/neogit.txt#L323
-  if ! pgrep -x -u "${USER}" gpg-agent >/dev/null 2>&1; then
-    gpg-connect-agent /bye >/dev/null 2>&1
-  fi
-
-  # Set SSH to use gpg-agent
-  unset SSH_AGENT_PID
-  if [ "${gnupg_SSH_AUTH_SOCK_by:-0}" -ne $$ ]; then
-    export SSH_AUTH_SOCK=$(gpgconf --list-dirs agent-ssh-socket)
-  fi
-  # gpgconf --launch gpg-agent
-
-  export GPG_TTY="$(tty)"
-
-  # Refresh gpg-agent tty in case user switches into an X session
-  gpg-connect-agent updatestartuptty /bye >/dev/null
-
-  if ! [[ -f "${HOME}/.gnupg/gpg.conf" ]]; then
-    echo -e 'pinentry-mode loopback' >"${HOME}/.gnupg/gpg.conf"
-  fi
-  if ! [[ -f "${HOME}/.gnupg/gpg-agent.conf" ]]; then
-    if [[ -f /opt/homebrew/bin/pinentry-tty ]]; then
-      echo -e "enable-ssh-support\npinentry-program /opt/homebrew/bin/pinentry-tty\nallow-loopback-pinentry" \
-        >"${HOME}/.gnupg/gpg-agent.conf"
-    elif [[ -f /usr/bin/pinentry ]]; then
-      echo -e "enable-ssh-support\npinentry-program /usr/bin/pinentry\nallow-loopback-pinentry" \
-        >"${HOME}/.gnupg/gpg-agent.conf"
-    elif [[ -f /home/linuxbrew/.linuxbrew/bin/pinentry-tty ]]; then
-      echo -e "enable-ssh-support\npinentry-program /home/linuxbrew/.linuxbrew/bin/pinentry-tty\nallow-loopback-pinentry" \
-        >"${HOME}/.gnupg/gpg-agent.conf"
-    fi
-  fi
-fi
-
 ### Git
 # aliases
 alias g='git'
@@ -64,11 +19,11 @@ alias gt='git tag'
 alias gd='git diff'
 
 ### Vim/NeoVim
-if command -v nvim &>/dev/null; then
+if (( $+commands[nvim] )); then
   alias vi='nvim' vim='nvim'
   export EDITOR=nvim
   [[ -d "${HOME}/.local/share/nvim/mason/bin" ]] && add_path "${HOME}/.local/share/nvim/mason/bin"
-elif command -v vim &>/dev/null; then
+elif (( $+commands[vim] )); then
   alias vi='vim' vim='vim'
   export EDITOR=vim
 fi
@@ -79,17 +34,17 @@ alias del="rip -i --graveyard ${HOME}/.graveyard" trash="rip -i --graveyard ${HO
 alias rm="echo Use 'del', or the full path i.e. '/bin/rm'."
 
 ### FZF
-(($+commands[fzf])) && _cached_eval fzf fzf --zsh
+(( $+commands[fzf] )) && _cached_eval fzf fzf --zsh
 
 ### Zoxide
-if command -v zoxide &>/dev/null; then
+if (( $+commands[zoxide] )); then
   # Patterns are separated by colons (zoxide 0.10 parses them with
   # env::split_paths; space-separated values silently disable exclusion).
   export _ZO_EXCLUDE_DIRS="\
 /tmp:/var:/proc:/sys:\
 ${HOME}/.cache:${HOME}/.npm:${HOME}/.cargo:${HOME}/.rustup:\
 ${HOME}/**/target:${HOME}/**/node_modules:${HOME}/**/dist:${HOME}/**/build:"
-  (($+commands[zoxide])) && _cached_eval zoxide zoxide init zsh
+  _cached_eval zoxide zoxide init zsh
 fi
 
 ### Yazi
@@ -111,7 +66,7 @@ function y() {
 }
 
 ### ls/eza
-if command -v eza &>/dev/null; then
+if (( $+commands[eza] )); then
   alias ls='eza --group-directories-first'
   alias la='eza -A --group-directories-first'
   alias ll='eza -Alh --group-directories-first --git'
@@ -125,16 +80,37 @@ else
   alias l='ls -alF'
 fi
 
-#alias ls='ls --color=auto' la='ls -A' ll='ls -Ahl' l.='ls -d .*' l='ls -alF'
 ### grep/ripgrep
-if command -v rg &>/dev/null; then
-  alias grep='rg --no-line-number --no-heading --with-filename'
-else
-  alias grep='grep --color=auto'
-fi
+# Translate the grep flags rg spells differently, hand the rest to real grep.
+function grep() {
+  emulate -L zsh
+  if (( ! $+commands[rg] )); then
+    command grep "$@"
+    return
+  fi
+  local -a args
+  local arg cleaned
+  for arg in "$@"; do
+    case "$arg" in
+    (-E|--extended-regexp|-r|-R|--recursive) ;; # rg's defaults
+    (-[A-Za-z]*)
+      case "$arg" in
+      (*h*) command grep "$@"; return ;; # grep -h: no filename
+      (*)
+        cleaned="${arg//[ErR]/}" # -E/-r/-R differ in rg
+        [[ "$cleaned" == "-" ]] || args+=("$cleaned")
+        ;;
+      esac
+      ;;
+    (--*) command grep "$@"; return ;; # long options differ, let grep parse
+    (*) args+=("$arg") ;;
+    esac
+  done
+  command rg --no-line-number --no-heading --with-filename "${args[@]}"
+}
 
 ### dl: du/dust
-if command -v dust &>/dev/null; then
+if (( $+commands[dust] )); then
   alias dl='dust -d 1'
 else
   alias dl='du -h --max-depth=1'
