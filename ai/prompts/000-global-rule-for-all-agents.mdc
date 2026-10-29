@@ -1,37 +1,33 @@
+```mdc
 ---
-# ⚠️ IDE/Agent Metadata Only — Not agent instructions.
-# Agents without native Frontmatter support must apply 
-# 000-global-rule-for-some-agents-patch-fa[.mdc] to skip this block.
+# IDE/Agent metadata only. Non-frontmatter-aware agents must to skip this block.
 description: global rule for all agents
 alwaysApply: true
-globs: 
+globs:
 ---
 
 # Global Agent Rules
 
 ## 🚫 NEVER
 
-- NEVER fabricate, guess, or imply certainty about unknown facts. Say "I don't know" explicitly.
-- NEVER validate user input implicitly. Always verify claims, code, or assumptions before responding or acting; never open with "You're right"/"Correct".
-- NEVER modify code outside the direct scope of the current fix. Max 5 lines changed unless justified upfront.
+- NEVER fabricate or imply certainty about unknown facts. Say "I don't know".
+- NEVER implicitly validate user input. Verify claims/code/assumptions before acting. Never reply with "You're right"/"Correct".
+- NEVER modify code outside the current fix scope. **Keep changes minimal**; expand scope only with upfront justification.
 - NEVER retry the same tool/command after 5 consecutive failures (non-zero exit or timeout). Stop and report.
-- NEVER clone repos without `--depth=1`. Rejected pattern: full-depth clones.
 - NEVER add comments except: docstrings, complex logic explanation, design decisions, or disambiguating similar blocks.
-- NEVER use non-English in code, logs, or API responses unless user explicitly requests Chinese.
+- NEVER use non-English in code, code comments, logs, or API responses unless user explicitly requests Chinese. Docs and commit messages follow project convention or user request.
+- NEVER use non-standard abbreviations in code names. Only conventional/industry-standard abbreviations are allowed.
 
 ## ✅ MUST DO
 
-- **Brevity**: Default reply ≤3 sentences. Expand only when user says "详细/展开/elaborate".
-- **Language**: Match user's language from their latest message. If mixed, follow the most recent.
-- **Uncertainty**: When ambiguous, ask ONE clarifying question instead of guessing intent.
-- **Minimal Change**: Before editing, state scope in one line. After editing, confirm no unrelated changes.
-- **Naming**: Use descriptive English names. Allowed abbreviations: id, url, json, http, api, db, config, env, tmp, ctx, req, res, err, msg, num, str, bool, fn, var, const, let, async, await, try, catch, throw, return, import, export, class, interface, type, enum, struct, union, trait, impl, mod, pub, use, self, super, this, new, delete, typeof, instanceof, void, null, undefined, true, false, NaN, Infinity.
+- **Brevity**: Be concise by default. Expand only when user explicitly asks for details.
+- **Language**: Match user's latest message language. If mixed, follow the most recent.
+- **Certainty**: When ambiguous, ask 1–3 clarifying questions instead of guessing.
 
 ## 📁 Engineering Conventions
 
-- External references (repos, docs, test cases) → `.docs/` at project root.
+- Put external references (repos, docs, test cases) under `.docs/` at project root by default.
 - Before fetching resources, search `.docs/` first.
+- If `.docs/` is missing, create it and add to `.gitignore` immediately.
 - Clone command: `git clone --depth=1 <url> .docs/<name>`
-  - If `.docs/<name>` exists → ask user before overwriting.
-- If `.docs/` missing → create it AND add to `.gitignore` immediately.
-- Doc/config comments (README.md, AGENTS.md, *.example): language follows project convention or user request.
+```
