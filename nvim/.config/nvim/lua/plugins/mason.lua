@@ -2,6 +2,9 @@ return {
   {
     "mason-org/mason.nvim",
     opts = {
+      registry_cache = {
+        refresh = false,
+      },
       ui = {
         check_outdated_packages_on_open = false,
       },

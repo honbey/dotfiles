@@ -8,7 +8,7 @@ source "${ZINIT_HOME}/zinit.zsh"
 # Specific zsh config's directory
 ZSH_HOME="${HOME}/.zsh"
 # The function need loaded as soon as possible
-zinit snippet "${ZSH_HOME}/99-functions.zsh"
+zinit snippet "${ZSH_HOME}/common.zsh"
 
 # Homebrew/Linuxbrew
 [[ -d /opt/homebrew/bin ]] && add_path "/opt/homebrew/bin"
@@ -17,8 +17,16 @@ zinit snippet "${ZSH_HOME}/99-functions.zsh"
 # Load starship theme
 (($+commands[starship])) && _cached_eval starship starship init zsh
 
-# Sourced early: locale, keymap and aliases are needed at the first prompt.
-source "${ZSH_HOME}/common.zsh"
+# History
+# Must be ready before the first prompt: autosuggestions reads $history.
+zinit lucid light-mode for \
+  atinit"HIST_STAMPS=yyyy-mm-dd" \
+  OMZL::history.zsh
+
+setopt hist_find_no_dups
+setopt hist_ignore_all_dups
+setopt hist_reduce_blanks
+setopt hist_save_no_dups
 
 # Turbo mode
 zinit wait lucid is-snippet for \
@@ -39,11 +47,8 @@ zinit wait'2' lucid is-snippet for \
   "${ZSH_HOME}/wait2-functions.zsh"
 
 ### Plugins(wait 0)
-# Init completion here so Tab works at the first prompt; FSH only replays.
-zicompinit
-
 zinit wait lucid light-mode depth'1' for \
-  atinit"zicdreplay" \
+  atinit"zicompinit; zicdreplay" \
   zdharma-continuum/fast-syntax-highlighting \
   atload"_zsh_autosuggest_start" \
   zsh-users/zsh-autosuggestions \
@@ -54,19 +59,6 @@ zinit wait lucid light-mode depth'1' for \
   has'fzf' \
   Aloxaf/fzf-tab
 
-zinit pack for ls_colors
-
-# Must be ready before the first prompt: autosuggestions reads $history.
-# No inc_append_history: share_history already appends each command.
-zinit lucid light-mode for \
-  atinit"HIST_STAMPS=yyyy-mm-dd" \
-  OMZL::history.zsh
-
-setopt hist_find_no_dups
-setopt hist_ignore_all_dups
-setopt hist_reduce_blanks
-setopt hist_save_no_dups
-
 zinit wait lucid light-mode for \
   OMZL::clipboard.zsh \
   OMZL::compfix.zsh \
@@ -74,6 +66,8 @@ zinit wait lucid light-mode for \
   OMZL::functions.zsh \
   OMZL::spectrum.zsh \
   OMZL::termsupport.zsh
+
+zinit pack for ls_colors
 
 ### Plugins(wait 1)
 zinit wait'1' lucid light-mode depth'1' for \

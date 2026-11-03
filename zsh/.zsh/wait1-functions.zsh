@@ -16,7 +16,7 @@ function generate_passwd() {
   symbols) charset="A-Za-z0-9!@#$%^&*()_+{}[]|:;<>,.?~" ;;
   *) charset="$2" ;;
   esac
-  (( $+commands[openssl] )) && openssl_existed=true || openssl_existed=""
+  (($+commands[openssl])) && openssl_existed=true || openssl_existed=""
   [[ -n "$3" && "${openssl_existed}" ]] && hashed=true || hashed=""
   [[ -n "$4" && "${hashed}" ]] && salt="$4" || salt=""
   passphrase=$(LC_ALL=C tr -dc "${charset}" </dev/urandom | head -c "${length}")
@@ -177,7 +177,7 @@ function smart_mv() {
   local use_git=1
   (
     local src top dst_abs
-    (( $+commands[git] )) || exit 1
+    (($+commands[git])) || exit 1
     [ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" = "true" ] || exit 1
     top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 1
     [ -n "$top" ] || exit 1

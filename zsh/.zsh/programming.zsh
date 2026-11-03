@@ -72,10 +72,10 @@ alias uv_mirror_off="pip_mirror_off"
 if [[ -z "${PIP_INDEX_URL}" && -z "${UV_DEFAULT_INDEX}" ]]; then
   pip_mirror_on tsinghua
 fi
-(( $+commands[pip3] )) && alias pip='pip3'
+(($+commands[pip3])) && alias pip='pip3'
 
 ### Rust
-if (( $+commands[rustup] )); then
+if (($+commands[rustup])); then
   export CARGO_HOME="${HOME}/.cargo"
   export RUSTUP_HOME="${HOME}/.rustup"
   export CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -133,7 +133,7 @@ if (( $+commands[rustup] )); then
 fi
 
 ### Golang
-if (( $+commands[go] )); then
+if (($+commands[go])); then
   export GOPATH="${HOME}/.go"
   if ! [[ -f "${HOME}/.config/go/env" ]]; then
     go env -w GOPROXY=https://goproxy.cn,direct
@@ -142,7 +142,7 @@ if (( $+commands[go] )); then
 fi
 
 ### OpenCode
-if (( $+commands[opencode] )); then
+if (($+commands[opencode])); then
   export OPENCODE_DISABLE_LSP_DOWNLOAD=true
   export OPENCODE_DISABLE_CLAUDE_CODE=1
 fi

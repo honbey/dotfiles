@@ -19,25 +19,29 @@ alias gt='git tag'
 alias gd='git diff'
 
 ### Vim/NeoVim
-if (( $+commands[nvim] )); then
+if (($+commands[nvim])); then
   alias vi='nvim' vim='nvim'
   export EDITOR=nvim
   [[ -d "${HOME}/.local/share/nvim/mason/bin" ]] && add_path "${HOME}/.local/share/nvim/mason/bin"
-elif (( $+commands[vim] )); then
+elif (($+commands[vim])); then
   alias vi='vim' vim='vim'
   export EDITOR=vim
 fi
 
 ### rm-improved
 # Safe rm
-alias del="rip -i --graveyard ${HOME}/.graveyard" trash="rip -i --graveyard ${HOME}/.graveyard"
-alias rm="echo Use 'del', or the full path i.e. '/bin/rm'."
+if (($+commands[rip])); then
+  alias del="rip -i --graveyard ${HOME}/.graveyard" trash="rip -i --graveyard ${HOME}/.graveyard"
+  alias rm="echo Use 'del', or the full path i.e. '/bin/rm'."
+else
+  alias rm="echo Use /bin/rm, or install rm-improved(rip)"
+fi
 
 ### FZF
-(( $+commands[fzf] )) && _cached_eval fzf fzf --zsh
+(($+commands[fzf])) && _cached_eval fzf fzf --zsh
 
 ### Zoxide
-if (( $+commands[zoxide] )); then
+if (($+commands[zoxide])); then
   # Patterns are separated by colons (zoxide 0.10 parses them with
   # env::split_paths; space-separated values silently disable exclusion).
   export _ZO_EXCLUDE_DIRS="\
@@ -66,7 +70,7 @@ function y() {
 }
 
 ### ls/eza
-if (( $+commands[eza] )); then
+if (($+commands[eza])); then
   alias ls='eza --group-directories-first'
   alias la='eza -A --group-directories-first'
   alias ll='eza -Alh --group-directories-first --git'
@@ -84,7 +88,7 @@ fi
 # Translate the grep flags rg spells differently, hand the rest to real grep.
 function grep() {
   emulate -L zsh
-  if (( ! $+commands[rg] )); then
+  if ((! $+commands[rg])); then
     command grep "$@"
     return
   fi
@@ -92,25 +96,31 @@ function grep() {
   local arg cleaned
   for arg in "$@"; do
     case "$arg" in
-    (-E|--extended-regexp|-r|-R|--recursive) ;; # rg's defaults
-    (-[A-Za-z]*)
+    -E | --extended-regexp | -r | -R | --recursive) ;; # rg's defaults
+    -[A-Za-z]*)
       case "$arg" in
-      (*h*) command grep "$@"; return ;; # grep -h: no filename
-      (*)
+      *h*)
+        command grep "$@"
+        return
+        ;; # grep -h: no filename
+      *)
         cleaned="${arg//[ErR]/}" # -E/-r/-R differ in rg
         [[ "$cleaned" == "-" ]] || args+=("$cleaned")
         ;;
       esac
       ;;
-    (--*) command grep "$@"; return ;; # long options differ, let grep parse
-    (*) args+=("$arg") ;;
+    --*)
+      command grep "$@"
+      return
+      ;; # long options differ, let grep parse
+    *) args+=("$arg") ;;
     esac
   done
   command rg --no-line-number --no-heading --with-filename "${args[@]}"
 }
 
 ### dl: du/dust
-if (( $+commands[dust] )); then
+if (($+commands[dust])); then
   alias dl='dust -d 1'
 else
   alias dl='du -h --max-depth=1'

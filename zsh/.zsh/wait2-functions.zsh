@@ -6,7 +6,7 @@ function _count_graveyard() {
   [[ -d "${HOME}/.graveyard" ]] || return 0
   # du -sk: POSIX; --summarize --bytes is GNU-only.
   kib=$(du -sk "${HOME}/.graveyard" | awk '{print $1}')
-  size=$(( ${kib:-0} * 1024 ))
+  size=$((${kib:-0} * 1024))
   if [[ ${size} -gt 3221225472 ]]; then
     echo -e "\nThe graveyard space has exceeded 3GiB.\nPlease clean it up!"
   elif [[ $1 == "run" ]]; then

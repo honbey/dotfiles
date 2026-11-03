@@ -48,14 +48,13 @@ function gpg_agent_setup() {
     gpg-connect-agent updatestartuptty /bye >/dev/null 2>&1
 }
 
-if (( $+commands[gpg] )); then
+if (($+commands[gpg])); then
   alias gnupg='gpg'
   gpg_agent_setup
 fi
 
-
 ### Podman
-if (( $+commands[podman] )); then
+if (($+commands[podman])); then
   function pexec() {
     podman exec -it "${1}" "${2:-/bin/bash}"
   }
@@ -67,7 +66,7 @@ fi
 
 ### Nginx
 # need Nginx and export NGINX_HOME in ~/.local.zsh
-if (( $+commands[nginx] )) && declare -p NGINX_HOME &>/dev/null; then
+if (($+commands[nginx])) && declare -p NGINX_HOME &>/dev/null; then
   alias nginx="nginx -c ${NGINX_HOME}"
   alias ngx="nginx -c ${NGINX_HOME}"
   alias ng="nginx -c ${NGINX_HOME}"

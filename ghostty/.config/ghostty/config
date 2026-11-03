@@ -2,10 +2,10 @@
 # - https://github.com/ghostty-org/ghostty
 # - https://ghostty.org/docs/config/reference
 font-family = "ComicShannsMono Nerd Font Mono"
-#font-family = "Maple Mono NF"
 font-family = "LXGW WenKai Mono"
+#font-family = "Maple Mono NF CN"
 
-font-size = 15.0
+font-size = 16.0
 
 quit-after-last-window-closed = true
 macos-option-as-alt = true
