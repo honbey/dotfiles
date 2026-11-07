@@ -20,7 +20,7 @@ globs:
 
 ## ✅ MUST DO
 
-- Show the staged diff (`git diff --cached`) and commit message draft to the user before executing `git commit`.
+- Show the staged diff (`git diff --cached`) before executing `git commit`, and show the final commit message to the user after committing.
 - Use `git commit -F <tmpfile>` for multi-line commit messages to avoid shell escaping issues.
 - Read project config to determine lint/test/build commands. Search order: `Makefile` → `package.json` scripts → `pyproject.toml` → `Cargo.toml` → ask user.
 - Classify staged files by checking if they are read by build/runtime. If uncertain → treat as code change and run checks.
@@ -33,7 +33,7 @@ globs:
 
 ### Step 1: Stage & Classify
 1. Run `git diff --cached --name-only` to get staged files.
-2. Run `git status --porcelain` to check unstaged/untracked code files. If found, ask user whether to stage them.
+2. Run `git status --porcelain` to check unstaged/untracked code files. On an explicit commit instruction, stage them with exact paths; otherwise ask the user whether to stage them.
 3. Classify: if **all** staged files are non-code (docs, images, `.gitignore`) → skip to Step 4.
 
 ### Step 2: Quality Gate (code changes only)
@@ -46,10 +46,10 @@ globs:
 ### Step 3: Commit Message
 1. Follow existing repo commit style. If none, use Conventional Commits: `<type>(<scope>): <subject>`.
 2. First commit in repo with no user preference → `chore: initial commit`.
-3. Present draft to user. Execute only after confirmation.
+3. On an explicit commit instruction, commit directly without an extra confirmation; show the final commit message after committing.
 
 ### Step 4: Report
-Before committing, output:
+After committing, output:
 - Commands executed and their pass/fail status
 - What was skipped and why (especially build verification)
-- The final commit message draft
+- The final commit message (as committed)

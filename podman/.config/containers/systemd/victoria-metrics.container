@@ -5,7 +5,7 @@ StartLimitIntervalSec=60
 StartLimitBurst=3
 
 [Container]
-Image=docker.io/victoriametrics/victoria-metrics:v1.150.0
+Image=docker.io/victoriametrics/victoria-metrics:v1.155.0
 
 ContainerName=victoria-metrics
 

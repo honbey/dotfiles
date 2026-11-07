@@ -87,14 +87,15 @@ GEN_METADATA=false
 TAR_PATHS=(
   .backup_excluded .backup_metadata
   .env .ssh .sqliterc .startup .stow-global-ignore .gnupg .graveyard
-  .cargo .npmrc .config/pip
-  .gitconfig .local.gitconfig
+  ".cargo/*.toml*" .npmrc .config/pip
+  .gitconfig .local.gitconfig .git-credentials
   .vim .vimrc
   .config/nvim .local/share/nvim .local/state/nvim
-  .zsh .zsh_history .zshenv .zshrc .local.zsh .local/share/zinit
+  .zsh .zsh_history .zshenv .zshrc .local.zsh .local/share/zinit .config/starship.toml
   .config/containers .config/ghostty .config/tmux
   .local/share/zoxide
-  Downloads app data dotfiles kb resources workspace
+  .local/share/containers/storage/volumes
+  Downloads app data dotfiles workspace
 )
 
 # Map long options to short ones before getopts.

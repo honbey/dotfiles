@@ -8,7 +8,7 @@ StartLimitIntervalSec=60
 StartLimitBurst=3
 
 [Container]
-Image=docker.io/grafana/grafana:13.2-slim
+Image=docker.io/grafana/grafana:13.3-slim
 
 ContainerName=grafana
 

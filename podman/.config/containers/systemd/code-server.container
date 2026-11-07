@@ -24,6 +24,9 @@ Volume=/opt/data/cache/code-server/share:/share:Z
 Volume=/opt/data/cache/code-server/cache:/root/.cache:Z
 Volume=/opt/data/cache/code-server/cache-linuxbrew:/home/linuxbrew/.cache:Z
 Volume=/opt/data/cache/code-server/npm:/root/.npm:Z
+Volume=/opt/data/cache/code-server/ai/.codebuddy/settings.json:/root/.codebuddy/settings.json:Z
+Volume=/opt/data/cache/code-server/ai/.codebuddy/mcp.json:/root/.codebuddy/mcp.json:Z
+Volume=/opt/data/cache/code-server/ai/CodeBuddyExtension:/root/.local/share/CodeBuddyExtension:Z
 # entrypointd, configs, data
 Volume=./code-server.conf.d/entrypoint.d/:/entrypoint.d:Z
 Volume=./code-server.conf.d/sync/snippets:/root/.local/share/code-server/User/snippets:Z
@@ -32,6 +35,7 @@ Volume=./code-server.conf.d/sync/keybindings.json:/root/.local/share/code-server
 Volume=./code-server.conf.d/sync/.zsh_history:/root/.zsh_history:Z
 Volume=./code-server.conf.d/sync/.local.zsh:/root/.local.zsh:Z
 Volume=./code-server.conf.d/sync/zoxide:/root/.local/share/zoxide:Z
+Volume=./code-server.conf.d/sync/.git-credentials:/root/.git-credentials:Z
 Volume=code-server_data.volume:/root/workspace:Z
 
 PublishPort=127.0.0.1:1040:8686

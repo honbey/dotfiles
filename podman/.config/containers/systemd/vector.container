@@ -8,7 +8,7 @@ StartLimitIntervalSec=60
 StartLimitBurst=3
 
 [Container]
-Image=docker.io/timberio/vector:0.58.X-debian
+Image=docker.io/timberio/vector:0.61.X-debian
 
 ContainerName=vector
 
@@ -39,7 +39,7 @@ LogDriver=journald
 #HealthCmd=wget --no-verbose --tries=1 --spider http://127.0.0.1:9001/health
 HealthCmd=vector --version
 #HealthStartPeriod=10s
-HealthInterval=600s
+HealthInterval=60s
 HealthTimeout=5s
 HealthRetries=3
 

@@ -35,22 +35,19 @@ function pip_mirror_on() {
   local mirror="${1:-tsinghua}"
   case "${mirror}" in
   official)
-    unset PIP_INDEX_URL UV_DEFAULT_INDEX UV_INDEX_URL
+    unset PIP_INDEX_URL UV_DEFAULT_INDEX
     ;;
   tsinghua)
     export PIP_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
     export UV_DEFAULT_INDEX="https://pypi.tuna.tsinghua.edu.cn/simple"
-    export UV_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
     ;;
   ustc)
     export PIP_INDEX_URL="https://mirrors.ustc.edu.cn/pypi/simple"
     export UV_DEFAULT_INDEX="https://mirrors.ustc.edu.cn/pypi/simple"
-    export UV_INDEX_URL="https://mirrors.ustc.edu.cn/pypi/simple"
     ;;
   ali)
     export PIP_INDEX_URL="https://mirrors.aliyun.com/pypi/simple"
     export UV_DEFAULT_INDEX="https://mirrors.aliyun.com/pypi/simple"
-    export UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple"
     ;;
   *)
     echo 'Please provide mirror name, only support "official", "tsinghua", "ustc" or "ali" now.'

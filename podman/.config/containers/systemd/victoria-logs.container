@@ -5,11 +5,11 @@ StartLimitIntervalSec=60
 StartLimitBurst=3
 
 [Container]
-Image=docker.io/victoriametrics/victoria-logs:v1.52.0
+Image=docker.io/victoriametrics/victoria-logs:v1.53.0
 
 ContainerName=victoria-logs
 
-Exec=-storageDataPath=/var/lib/victoria -retentionPeriod=91d
+Exec=-storageDataPath=/var/lib/victoria -retentionPeriod=181d -retention.maxDiskSpaceUsageBytes=20GiB
 
 StopTimeout=10
 
@@ -31,7 +31,7 @@ LogDriver=journald
 #HealthCmd=wget --no-verbose --tries=1 --spider http://127.0.0.1:9428/health
 HealthCmd=["./victoria-logs-prod", "-version"]
 #HealthStartPeriod=10s
-HealthInterval=600s
+HealthInterval=60s
 HealthTimeout=5s
 HealthRetries=3
 

@@ -5,7 +5,7 @@ StartLimitIntervalSec=60
 StartLimitBurst=3
 
 [Container]
-Image=docker.io/grafana/loki:3.7.7
+Image=docker.io/grafana/loki:3.7.9
 
 ContainerName=loki
 
